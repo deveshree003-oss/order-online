@@ -1,0 +1,49 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { getDealActions, extractDealInformation } from "../app/_lib/deal-detail.ts";
+
+const firstCryDescription = `Deal Type: Review
+Product Code: BAYBEE_Bedside_Crib_fc
+Brand Name: Dom
+Platform: FirstCry
+Order Link: https://bitli.in/QyeGq8Q
+Mediator Name: Samarth
+Order Form:
+https://deal.jayshakthimarketing.com/orderform?product_code=BAYBEE_Bedside_Crib_fc&deal_type_id=9395&mediator_name=Samarth
+Refund Form:
+https://deal.jayshakthimarketing.com/refundform
+Track Status:
+https://deal.jayshakthimarketing.com/customer`;
+
+test("creates one action per unique order, refund, and track URL", () => {
+  const actions = getDealActions(`${firstCryDescription}
+Order Form: https://deal.jayshakthimarketing.com/orderform?product_code=BAYBEE_Bedside_Crib_fc&deal_type_id=9395&mediator_name=Samarth`);
+
+  assert.deepEqual(actions.map((action) => action.label), [
+    "Open Product",
+    "Open Order Form",
+    "Open Refund Form",
+    "Track Order",
+  ]);
+});
+
+test("keeps genuinely different product links as separate actions", () => {
+  const actions = getDealActions("[Meal Pod Black](https://example.com/black)\n[Meal Pod Rouge](https://example.com/rouge)");
+
+  assert.deepEqual(actions.map((action) => action.label), ["Open Meal Pod Black", "Open Meal Pod Rouge"]);
+});
+
+test("omits missing actions and extracts structured deal information", () => {
+  const actions = getDealActions("Deal Type: Review\nNo links here");
+  const information = extractDealInformation("Deal Type: Review\nMediator Name: Samarth\n⚠️ Don't Change Link");
+
+  assert.deepEqual(actions, []);
+  assert.deepEqual(information, {
+    dealType: "Review",
+    platform: null,
+    brand: null,
+    mediator: "Samarth",
+    instruction: "⚠️ Don't Change Link",
+  });
+});
