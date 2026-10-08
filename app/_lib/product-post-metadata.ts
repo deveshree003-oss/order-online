@@ -7,7 +7,7 @@ import {
   nullablePrice,
   parseProductPostMessage,
   platformFromUrl,
-} from "./product-post-parser";
+} from "./product-post-parser.ts";
 
 const requestTimeoutMs = 1500;
 
@@ -306,7 +306,7 @@ async function fetchProductPage(
       cleanProductTitle(rawName);
 
     const genericTitle =
-      /^(?:firstcry|amazon|flipkart|myntra|meesho)(?:\s+(?:store|india|online))?$/i.test(
+      /^(?:firstcry|amazon|flipkart|myntra|meesho)(?:\s+(?:store|india|online|new))?$/i.test(
         cleanedName,
       );
 

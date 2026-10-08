@@ -75,16 +75,6 @@ export default async function AdminPage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    {post.status !== "draft" && (
-                      <a
-                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-slate-400"
-                        href={`/products/${post.id}`}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                      >
-                        View Site
-                      </a>
-                    )}
                     {post.status === "live" && <form action={markProductPostOverFormAction}><input name="postId" type="hidden" value={post.id} /><button className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-slate-400" type="submit">Mark over</button></form>}
                     <DeleteProductPostButton deleteAction={deleteProductPostFormAction} postId={post.id} productName={post.product_name} />
                   </div>

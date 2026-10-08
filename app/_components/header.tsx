@@ -92,15 +92,16 @@ export default function Header({
             </span>
           </a>
 
-          {/* Mobile Admin Icon */}
+          {/* Mobile Admin */}
           <a
             aria-label="Open admin"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-400 hover:text-slate-950 sm:hidden"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 text-slate-700 transition hover:border-slate-400 hover:text-slate-950 sm:hidden"
             href="/admin"
           >
-            <span aria-hidden="true" className="text-lg">
+            <span aria-hidden="true" className="text-base">
               ♙
             </span>
+            <span className="text-[10px] font-semibold lowercase">admin</span>
           </a>
 
           {/* Mobile Menu Button */}

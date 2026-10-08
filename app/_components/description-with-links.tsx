@@ -28,7 +28,7 @@ export default function DescriptionWithLinks({ description }: { description: str
           ) : (
             <a
               aria-label={part.actionLabel ? `${part.actionLabel}: ${part.url}` : undefined}
-              className="font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-950 hover:decoration-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-600 focus:ring-offset-2"
+              className="break-all font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-950 hover:decoration-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-600 focus:ring-offset-2 sm:break-words"
               href={part.url}
               key={`link-${lineIndex}-${partIndex}`}
               rel="noopener noreferrer"

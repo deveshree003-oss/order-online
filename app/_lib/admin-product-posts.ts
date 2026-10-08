@@ -1,6 +1,6 @@
-import { createSupabaseServerClient } from "./supabase-server";
-import { classifySupabaseError, logSupabaseError } from "./supabase-error";
-import { cleanProductTitle, deriveProductNameFromUrl, extractProductUrls, inferProductNameFromMessage, isValidProductName, parseProductPostMessage, platformFromUrl } from "./product-post-parser";
+import { createSupabaseServerClient } from "./supabase-server.ts";
+import { classifySupabaseError, logSupabaseError } from "./supabase-error.ts";
+import { cleanProductTitle, deriveProductNameFromUrl, extractProductUrls, inferProductNameFromMessage, isValidProductName, parseProductPostMessage, platformFromUrl } from "./product-post-parser.ts";
 
 export type AdminProductPost = {
   id: string;
@@ -36,8 +36,8 @@ async function normalizePost(row: Record<string, unknown>): Promise<AdminProduct
   const localName =
     storedName ||
     parsed.productName ||
-    inferProductNameFromMessage(description) ||
-    deriveProductNameFromUrl(productUrl ?? "");
+    deriveProductNameFromUrl(productUrl ?? "") ||
+    inferProductNameFromMessage(description);
   return {
     id: String(row.id),
     image_url: String(row.image_url),

@@ -42,7 +42,190 @@ const genericProductNames = new Set([
 ]);
 
 const nonProductLinePattern =
-  /^(?:code|product code|brand(?: name)?|platform(?: name)?|store|website|deal(?: type)?|mediator(?: name)?|order price|order amount|deal price|final price|less(?: price)?|savings?|discount|order|order links?|refund links?|track(?:ing)? links?|forms?|ratings?|rating|(?:don't|do not)\s+(?:change|modify)\s+link)\b/i;
+  /^(?:code|product code|brand(?: name)?|platform(?: name)?|store|website|deal(?: type)?|mediator(?: name)?|order price|order amount|deal price|final price|less(?: price)?|savings?|discount|order\s+links?|refund links?|track(?:ing)? links?|forms?|ratings?|rating|review|review\s+deal|review\s+29|(?:don't|do not)\s+(?:change|modify)\s+link)\b/i;
+
+const instructionOnlyWords = new Set([
+  "a",
+  "after",
+  "and",
+  "before",
+  "be",
+  "by",
+  "complete",
+  "do",
+  "else",
+  "fill",
+  "form",
+  "forms",
+  "here",
+  "in",
+  "join",
+  "link",
+  "links",
+  "mandatory",
+  "minutes",
+  "minute",
+  "must",
+  "next",
+  "no",
+  "of",
+  "offer",
+  "offers",
+  "only",
+  "or",
+  "order",
+  "passed",
+  "please",
+  "rating",
+  "ratings",
+  "refund",
+  "review",
+  "reviews",
+  "slot",
+  "slots",
+  "the",
+  "to",
+  "track",
+  "tracking",
+  "whatsapp",
+  "when",
+  "within",
+  "will",
+  "fast",
+  "thank",
+  "you",
+]);
+
+const instructionCategoryWords = new Set([
+  "complete",
+  "fill",
+  "form",
+  "forms",
+  "join",
+  "link",
+  "links",
+  "mandatory",
+  "must",
+  "offer",
+  "offers",
+  "order",
+  "passed",
+  "rating",
+  "ratings",
+  "refund",
+  "review",
+  "reviews",
+  "slot",
+  "slots",
+  "track",
+  "tracking",
+  "whatsapp",
+  "thank",
+]);
+
+const operationalSentenceStarters = new Set([
+  "add",
+  "check",
+  "click",
+  "complete",
+  "contact",
+  "do",
+  "mandatory",
+  "fill",
+  "follow",
+  "join",
+  "place",
+  "please",
+  "send",
+  "submit",
+  "track",
+  "use",
+  "wait",
+  "within",
+  "write",
+]);
+
+function isInstructionOnlyName(normalized: string) {
+  const words = normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
+
+  return (
+    words.length > 0 &&
+    words.some((word) => instructionCategoryWords.has(word)) &&
+    words.every((word) => instructionOnlyWords.has(word) || /^\d+$/.test(word))
+  );
+}
+
+function isOperationalInstructionSentence(normalized: string) {
+  const words =
+    normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
+
+  const firstWord = words[0] ?? "";
+
+  const hasInstructionCategory = words.some((word) =>
+    instructionCategoryWords.has(word),
+  );
+
+  const hasUrgencyOrTemporalStructure =
+    /\b(?:else\s+slot|slot\s+will)\b/i.test(normalized) ||
+    /\b(?:within|in\s+next|order\s+in|order\s+within)\b[\s\S]*\b(?:\d+\s*)?(?:min(?:ute)?s?|hours?|days?)\b/i.test(
+      normalized,
+    );
+
+  const hasConditionalInstruction =
+    /^(?:if|when)\b/i.test(normalized) &&
+    hasInstructionCategory &&
+    /\b(?:fill(?:ing|ed)?|complete|submit(?:ting|ted)?|send(?:ing|sent)?|join(?:ing|ed)?|track(?:ing|ed)?|order(?:ing|ed)?|review(?:ing|ed)?|refund(?:ing|ed)?|use|write|add|place|wait|share|provide)\b/i.test(
+      normalized,
+    );
+
+  const hasImperativeInstruction =
+    /^(?:(?:please\s+)?(?:don't|dont|do\s+not)|please)\b/i.test(
+      normalized,
+    ) && hasInstructionCategory;
+
+  /*
+   * Catches instruction sentences such as:
+   *
+   * Refund form needs to be filled in 20
+   * Refund form needs to be filled in 20 minutes
+   * Order form needs to be filled
+   * Review needs to be submitted
+   * Order link needs to be opened
+   * Rating needs to be submitted
+   */
+  const operationalInstructionPattern =
+    /\b(?:refund|order|review|rating|form|link|whatsapp|slot|payment|reference|tracking)\b[\s\S]*\b(?:needs?|need|must|should|has\s+to|have\s+to)\b[\s\S]*\b(?:filled|fill|submitted|submit|opened|open|completed|complete|joined|join|sent|send|shared|share|required|passed)\b/i;
+
+  if (operationalInstructionPattern.test(normalized)) {
+    return true;
+  }
+
+  if (hasConditionalInstruction || hasImperativeInstruction) {
+    return true;
+  }
+
+  /*
+   * Specifically catches refund-form instructions.
+   */
+  if (
+    /\brefund\s+form\b[\s\S]*\b(?:needs?|need|must|should|has\s+to|have\s+to)\b/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * Existing instruction detection.
+   */
+  return (
+    hasInstructionCategory &&
+    (
+      operationalSentenceStarters.has(firstWord) ||
+      hasUrgencyOrTemporalStructure
+    )
+  );
+}
 
 const labels = {
   productName: [
@@ -75,11 +258,34 @@ export function nullablePrice(value: string) {
 }
 
 export function isValidProductName(value: string) {
-  const normalized = value.replace(/\s+/g, " ").trim().toLowerCase();
+  const cleanedLine = cleanLine(value);
+
+  if (/:\s*$/.test(cleanedLine)) return false;
+
+  const normalized = cleanedLine
+    .replace(/[:;]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const genericNameKey = normalized
+    .replace(/[\s\-–—/,]+/g, " ")
+    .trim();
 
   if (!normalized) return false;
 
-  if (genericProductNames.has(normalized)) return false;
+  if (genericProductNames.has(genericNameKey)) return false;
+
+  if (isInstructionOnlyName(normalized)) return false;
+
+  if (isOperationalInstructionSentence(normalized)) return false;
+
+  if (
+    /^(?:review(?:\s+deal|\s+29)?|deal|offer|order(?:\s+link|\s+links)?|order\s+form|fill\s+order\s+form|general\s+form|exchange(?:\s+deal)?|ratings?(?:\s+deal)?|rating|amazon|firstcry|flipkart|myntra|meesho|any\s+size|any\s+color|any\s+colour)$/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
 
   if (nonProductLinePattern.test(normalized)) return false;
 
@@ -133,6 +339,8 @@ function cleanLine(line: string) {
     .replace(/\\\*{1,2}/g, "")
     .replace(/[*_`]/g, "")
     .replace(/^[\s>*#•▪◦-]+/, "")
+    .replace(/^[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u{1F1E6}-\u{1F1FF}\s]+/gu, "")
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u{1F1E6}-\u{1F1FF}\s]+$/gu, "")
     .trim();
 }
 function escapeRegExp(value: string) {
@@ -314,13 +522,19 @@ export function cleanProductTitle(value: string) {
     "",
   );
 
+  // Remove generic deal/instruction labels from otherwise meaningful titles.
+  cleaned = cleaned.replace(
+    /\b(?:order\s+link(?:s)?|fill\s+order\s+form|general\s+form|review(?:\s+deal)?|ratings?(?:\s+deal)?|deal|offer|exchange(?:\s+deal)?)\b/gi,
+    "",
+  );
+
   // Remove obvious SKU/ASIN/Product Code fragments.
   cleaned = cleaned.replace(
     /\b(?:asin|sku|item number|product code|model)\s*[:#-]?\s*[A-Za-z0-9_-]+\b/gi,
     "",
   );
 
-     cleaned = cleaned
+  cleaned = cleaned
     .replace(/\s+\|\s*$/g, "");
 
   cleaned = cleaned.replace(

@@ -66,7 +66,10 @@ function actionPresentation(type: DealAction["type"]) {
     case "track":
       return { label: "Track Order", icon: "📊" };
     case "whatsapp":
-      return { label: "Join WhatsApp", icon: "💬" };
+      return {
+        label: "Send Reference on WhatsApp (MANDATORY)",
+        icon: "📩",
+      };
     default:
       return { label: "Open Product", icon: "🛒" };
   }

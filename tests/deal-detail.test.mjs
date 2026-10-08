@@ -34,6 +34,16 @@ test("keeps genuinely different product links as separate actions", () => {
   assert.deepEqual(actions.map((action) => action.label), ["Open Meal Pod Black", "Open Meal Pod Rouge"]);
 });
 
+test("adds a mandatory send-reference action for WhatsApp links", () => {
+  const actions = getDealActions(
+    "Send order reference on WhatsApp: https://wa.me/919876543210",
+  );
+  const whatsappAction = actions.find((action) => action.type === "whatsapp");
+
+  assert.equal(whatsappAction?.label, "Send Reference on WhatsApp (MANDATORY)");
+  assert.equal(whatsappAction?.url, "https://wa.me/919876543210");
+});
+
 test("omits missing actions and extracts structured deal information", () => {
   const actions = getDealActions("Deal Type: Review\nNo links here");
   const information = extractDealInformation("Deal Type: Review\nMediator Name: Samarth\n⚠️ Don't Change Link");
