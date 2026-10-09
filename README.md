@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DealNest — Mediator-to-Customer Deal Platform
+
+DealNest is a full-stack web application that enables mediators to publish product deals and helps customers discover products and access external ordering information through a centralized platform.
+
+## Features
+- **Product Discovery:** Browse product listings with images, brands, platforms, and pricing details.
+- **Automated Metadata Extraction:** Parse unstructured deal messages and extract product information from webpage metadata and URLs.
+- **Admin Dashboard:** Create, update, publish, and manage product posts through an authenticated interface.
+- **Secure Data Management:** Use Supabase Auth and PostgreSQL Row Level Security (RLS) to protect administrative operations.
+- **Image Storage:** Manage product images using Supabase Storage.
+- **Publication Lifecycle:** Organize listings with draft, LIVE, and OVER statuses.
+
+## Tech Stack
+Next.js, React, TypeScript, Tailwind CSS, Supabase, PostgreSQL, Vercel.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+git clone https://github.com/deveshree003-oss/order-online.git
+cd order-online
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Configure the required Supabase environment variables in `.env.local` before starting the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Future Enhancements
+- Visitor analytics and product interaction tracking.
+- An admin dashboard for measuring platform usage and impact.
+- AI-assisted product categorization and metadata extraction.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Author
+**Deveshree Dhobe** · [GitHub](https://github.com/deveshree003-oss)
