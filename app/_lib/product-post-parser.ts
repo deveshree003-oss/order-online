@@ -275,6 +275,18 @@ export function isValidProductName(value: string) {
 
   if (genericProductNames.has(genericNameKey)) return false;
 
+  if (
+    /\bpayment\s+updates?\b|\bregular\s+rat(?:ing|ting)s?\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:delete\s*\/\s*error|error\s*\/\s*delete)\b|\bunverified\b/i.test(
+      normalized,
+    ) ||
+    inlineLessPrice(cleanedLine)
+  ) {
+    return false;
+  }
+
   if (isInstructionOnlyName(normalized)) return false;
 
   if (isOperationalInstructionSentence(normalized)) return false;

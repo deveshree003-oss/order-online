@@ -9,8 +9,28 @@ import { numericPrice } from "../../_lib/pricing";
 
 export const dynamic = "force-dynamic";
 
-function QuickActions({ description }: { description: string }) {
-  const actions = getDealActions(description);
+function QuickActions({
+  description,
+  productName,
+  brand,
+  platform,
+  orderPrice,
+  lessPrice,
+}: {
+  description: string;
+  productName: string | null;
+  brand: string | null;
+  platform: string | null;
+  orderPrice: number | string | null;
+  lessPrice: number | string | null;
+}) {
+  const actions = getDealActions(description, {
+    productName,
+    brand,
+    platform,
+    orderPrice,
+    lessPrice,
+  });
 
   if (actions.length === 0) return null;
 
@@ -97,7 +117,14 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
               <p className="mt-2 text-lg font-black text-slate-950">Slots left: {slotSummary.availableSlots}</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">Checked directly from the order form.</p>
             </section>}
-            <QuickActions description={post.description} />
+            <QuickActions
+              brand={post.brand}
+              description={post.description}
+              lessPrice={post.less_price}
+              orderPrice={post.order_price}
+              platform={post.platform}
+              productName={post.product_name}
+            />
             {dealInformation.instruction && <section className="mt-5 rounded-2xl border border-amber-200 bg-[#fffaf0] p-3 sm:mt-8 sm:p-5">
               <h2 className="text-xs font-black uppercase tracking-[0.12em] text-amber-800 sm:text-sm sm:tracking-[0.14em]">Important deal instruction</h2>
               <p className="mt-1.5 text-sm font-semibold leading-5 text-amber-950 sm:mt-2 sm:leading-6">{dealInformation.instruction}</p>

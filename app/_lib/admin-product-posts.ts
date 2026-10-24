@@ -33,17 +33,20 @@ async function normalizePost(row: Record<string, unknown>): Promise<AdminProduct
   const productUrl = urls.find((url) => platformFromUrl(url)) ?? urls[0];
   const storedNameCandidate = typeof row.product_name === "string" ? cleanProductTitle(row.product_name) : "";
   const storedName = isValidProductName(storedNameCandidate) ? storedNameCandidate : "";
+  const brandCandidate = typeof row.brand === "string" ? cleanProductTitle(row.brand) : "";
+  const brand = isValidProductName(brandCandidate) ? brandCandidate : null;
   const localName =
     storedName ||
     parsed.productName ||
     deriveProductNameFromUrl(productUrl ?? "") ||
+    brand ||
     inferProductNameFromMessage(description);
   return {
     id: String(row.id),
     image_url: String(row.image_url),
     description,
     product_name: localName || null,
-    brand: typeof row.brand === "string" ? row.brand : null,
+    brand,
     platform: typeof row.platform === "string" ? row.platform : parsed.platform || null,
     order_price: typeof row.order_price === "number" || typeof row.order_price === "string" ? row.order_price : null,
     less_price: typeof row.less_price === "number" || typeof row.less_price === "string" ? row.less_price : null,
@@ -100,5 +103,42 @@ export async function getAdminProductPosts(): Promise<AdminProductPostsResult> {
       posts: [],
       errorMessage: userFacingError(error),
     };
+  }
+}
+
+export async function getAdminProductPost(id: string): Promise<{ post: AdminProductPost | null; errorMessage: string | null }> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const primary = await supabase
+      .from("product_posts")
+      .select(metadataSelect)
+      .eq("id", id)
+      .maybeSingle();
+    let row: unknown = primary.data;
+    let queryError: unknown = primary.error;
+
+    if (queryError && classifySupabaseError(queryError) === "missing-column") {
+      logSupabaseError("Product post metadata columns are unavailable; using base product_posts columns.", queryError, "warn");
+      const fallback = await supabase
+        .from("product_posts")
+        .select(baseSelect)
+        .eq("id", id)
+        .maybeSingle();
+      row = fallback.data;
+      queryError = fallback.error;
+    }
+
+    if (queryError) {
+      logSupabaseError("Unable to load admin product post.", queryError);
+      return { post: null, errorMessage: userFacingError(queryError) };
+    }
+
+    return {
+      post: row ? await normalizePost(row as Record<string, unknown>) : null,
+      errorMessage: null,
+    };
+  } catch (error) {
+    logSupabaseError("Unable to load admin product post.", error);
+    return { post: null, errorMessage: userFacingError(error) };
   }
 }

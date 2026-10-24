@@ -56,22 +56,6 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
       <Header onHowItWorks={() => setIsHowItWorksOpen(true)} searchValue={query} onSearchChange={setQuery} />
       <main>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <section className="pt-3 sm:pt-6">
-            <div className="rounded-2xl border border-slate-200 bg-[#f1f5f8] px-3 py-3 shadow-sm sm:px-8 sm:py-7">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-950 sm:text-sm">⚡ Before you order</p>
-                  <p className="mt-2 text-xs font-medium leading-5 text-slate-950 sm:mt-3 sm:text-base sm:leading-7">
-                    Check available slots first <span className="mx-1 text-slate-400">•</span> Complete the Order Form <span className="mx-1 text-slate-400">•</span> Send your reference <span className="mx-1 text-slate-400">•</span> Follow deal instructions
-                  </p>
-                </div>
-                <button className="hidden min-h-12 shrink-0 items-center self-start rounded-full border border-emerald-500 bg-[#10B981] px-5 text-sm font-bold text-white transition hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 lg:inline-flex lg:self-center" onClick={() => setIsHowItWorksOpen(true)} type="button">
-                  How it works →
-                </button>
-              </div>
-            </div>
-          </section>
-
           <section className="relative mt-5 hidden overflow-hidden rounded-[2rem] border border-slate-200 bg-[#f1f5f8] px-5 py-10 shadow-sm sm:px-10 sm:py-14 md:block">
             <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-100/70 blur-3xl" />
             <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-sky-100/70 blur-3xl" />

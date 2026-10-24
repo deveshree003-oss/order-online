@@ -101,6 +101,13 @@ async function normalizePost(
   )
     ? storedNameCandidate
     : "";
+  const brandCandidate =
+    typeof row.brand === "string"
+      ? cleanProductTitle(row.brand)
+      : "";
+  const validBrand = isValidProductName(brandCandidate)
+    ? brandCandidate
+    : "";
 
   /*
    * ------------------------------------------------------------
@@ -169,8 +176,7 @@ async function normalizePost(
   let localName =
     storedName ||
     parsedName ||
-    urlName ||
-    inferredName;
+    urlName;
 
   /*
    * ------------------------------------------------------------
@@ -209,6 +215,10 @@ async function normalizePost(
     }
   }
 
+  if (!localName) {
+    localName = validBrand || inferredName;
+  }
+
   const storedLessPrice =
     typeof row.less_price === "number" ||
     typeof row.less_price === "string"
@@ -225,9 +235,7 @@ async function normalizePost(
     product_name: localName || null,
 
     brand:
-      typeof row.brand === "string"
-        ? row.brand
-        : null,
+      validBrand || null,
 
     platform:
       typeof row.platform === "string"

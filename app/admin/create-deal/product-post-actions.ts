@@ -52,6 +52,9 @@ function validatePost(formData: FormData) {
   const platform = textValue(formData, "platform");
   const orderPrice = priceValue(textValue(formData, "orderPrice"));
   const lessPrice = priceValue(textValue(formData, "lessPrice"));
+  const ratingText = textValue(formData, "rating");
+  const rating = ratingText ? Number(ratingText) : null;
+  const validRating = ratingText === "" || (rating !== null && Number.isFinite(rating) && rating >= 0 && rating <= 5);
   const fieldErrors: Record<string, string> = {};
 
   if (!imageUrl || !validHttpUrl(imageUrl)) fieldErrors.imageUrl = "Upload a valid product image before publishing.";
@@ -60,10 +63,11 @@ function validatePost(formData: FormData) {
   if (!postStatuses.includes(status as ProductPostStatus)) fieldErrors.status = "Choose a valid post status.";
   if (textValue(formData, "orderPrice") && orderPrice === null) fieldErrors.orderPrice = "Enter a valid non-negative order price.";
   if (textValue(formData, "lessPrice") && lessPrice === null) fieldErrors.lessPrice = "Enter a valid non-negative final price.";
+  if (!validRating) fieldErrors.rating = "Enter a rating from 0 to 5.";
 
   return {
     fieldErrors,
-    values: { imageUrl, description, status: status as ProductPostStatus, productName: productName || null, brand: brand || null, platform: platform || null, orderPrice, lessPrice },
+    values: { imageUrl, description, status: status as ProductPostStatus, productName: productName || null, brand: brand || null, platform: platform || null, orderPrice, lessPrice, rating },
   };
 }
 
@@ -83,6 +87,8 @@ async function metadataForPublish(formData: FormData, description: string) {
   const submittedPlatform = textValue(formData, "platform");
   const submittedOrderPrice = priceValue(textValue(formData, "orderPrice"));
   const submittedLessPrice = priceValue(textValue(formData, "lessPrice"));
+  const submittedRatingText = textValue(formData, "rating");
+  const submittedRating = submittedRatingText ? Number(submittedRatingText) : null;
   const labeledName = validSubmittedName(parsed.productName);
   const needsRemoteName = !submittedName && !labeledName;
   const extracted = needsRemoteName
@@ -102,7 +108,7 @@ async function metadataForPublish(formData: FormData, description: string) {
     platform: submittedPlatform || parsed.platform || extracted.platform || "",
     orderPrice: submittedOrderPrice ?? nullablePrice(parsed.orderPrice) ?? extracted.orderPrice,
     lessPrice: submittedLessPrice ?? nullablePrice(parsed.lessPrice) ?? extracted.lessPrice,
-    rating: extracted.rating,
+    rating: submittedRating ?? extracted.rating,
   };
 }
 
@@ -131,6 +137,7 @@ export async function createProductPostAction(_previousState: CreateDealState, f
   enriched.set("platform", extracted.platform ?? "");
   enriched.set("orderPrice", extracted.orderPrice === null ? "" : String(extracted.orderPrice));
   enriched.set("lessPrice", extracted.lessPrice === null ? "" : String(extracted.lessPrice));
+  enriched.set("rating", extracted.rating === null ? "" : String(extracted.rating));
   const { fieldErrors, values } = validatePost(enriched);
   if (Object.keys(fieldErrors).length > 0) return { errorMessage: "Please correct the highlighted fields.", successMessage: null, fieldErrors };
 
@@ -167,7 +174,7 @@ export async function createProductPostAction(_previousState: CreateDealState, f
     platform: values.platform,
     order_price: values.orderPrice,
     less_price: values.lessPrice,
-    rating: extracted.rating,
+    rating: values.rating,
   };
   let { error } = await supabase.from("product_posts").insert(fullPayload);
 
@@ -205,9 +212,10 @@ export async function createProductPostAction(_previousState: CreateDealState, f
   return { errorMessage: null, successMessage: "Product published successfully.", fieldErrors: {} };
 }
 
-export async function updateProductPostAction(formData: FormData) {
+export async function updateProductPostAction(_previousState: CreateDealState, formData: FormData): Promise<CreateDealState> {
   const { user, isAuthorized } = await getAdminSession();
-  if (!user || !isAuthorized) return { errorMessage: "You are not authorized to update product posts." };
+  if (!user) return unauthorized("Your session has expired. Please sign in again.");
+  if (!isAuthorized) return unauthorized("You are not authorized to update product posts.");
 
   const id = textValue(formData, "postId");
   const description = rawTextValue(formData, "details");
@@ -221,9 +229,10 @@ export async function updateProductPostAction(formData: FormData) {
   enriched.set("platform", extracted.platform ?? "");
   enriched.set("orderPrice", extracted.orderPrice === null ? "" : String(extracted.orderPrice));
   enriched.set("lessPrice", extracted.lessPrice === null ? "" : String(extracted.lessPrice));
+  enriched.set("rating", extracted.rating === null ? "" : String(extracted.rating));
   const { fieldErrors, values } = validatePost(enriched);
-  if (!id) return { errorMessage: "A product post id is required." };
-  if (Object.keys(fieldErrors).length > 0) return { errorMessage: "Please correct the highlighted fields.", fieldErrors };
+  if (!id) return unauthorized("A product post id is required.");
+  if (Object.keys(fieldErrors).length > 0) return { errorMessage: "Please correct the highlighted fields.", successMessage: null, fieldErrors };
 
   const supabase = await createSupabaseServerClient();
   const { data: existingPost, error: existingPostError } = await supabase
@@ -231,7 +240,15 @@ export async function updateProductPostAction(formData: FormData) {
     .select("status, image_url")
     .eq("id", id)
     .maybeSingle();
-  if (existingPostError || !existingPost) return { errorMessage: "That product post could not be found." };
+  if (existingPostError) {
+    logSupabaseError("Unable to load product post before updating.", existingPostError);
+    return unauthorized("We could not load this product post. Check the server log for the Supabase error.");
+  }
+  if (!existingPost) return unauthorized("That product post could not be found.");
+  const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+  if (values.imageUrl !== existingPost.image_url && (!storageBucket || !values.imageUrl.includes(`/storage/v1/object/public/${storageBucket}/`))) {
+    return unauthorized("The replacement image must be uploaded to the configured product-images bucket.");
+  }
 
   const payload = {
     image_url: values.imageUrl,
@@ -242,7 +259,7 @@ export async function updateProductPostAction(formData: FormData) {
     platform: values.platform,
     order_price: values.orderPrice,
     less_price: values.lessPrice,
-    rating: extracted.rating,
+    rating: values.rating,
   };
   const { data: updatedPost, error } = await supabase
     .from("product_posts")
@@ -253,20 +270,29 @@ export async function updateProductPostAction(formData: FormData) {
 
   if (error) {
     logSupabaseError("Unable to update product post metadata.", error);
-    return { errorMessage: "We could not update this product post." };
+    return unauthorized("We could not update this product post. Check the server log for the Supabase error.");
   }
   if (!updatedPost) {
     logSupabaseError("Product post update returned no row.", { code: "UPDATE_NO_ROW", message: `No product post matched id ${id}.` });
-    return { errorMessage: "The product post could not be verified after saving." };
+    return unauthorized("The product post could not be verified after saving.");
   }
-  if (existingPost.image_url !== values.imageUrl) {
-    const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
-    if (storageBucket) await removeProductImage(supabase, existingPost.image_url, storageBucket);
+  const imageRemovalError = existingPost.image_url !== values.imageUrl && storageBucket
+    ? await removeProductImage(supabase, existingPost.image_url, storageBucket)
+    : null;
+  if (imageRemovalError) {
+    logSupabaseError("Product post was updated, but the previous product image could not be removed.", imageRemovalError, "warn");
   }
   revalidatePath("/");
+  revalidatePath("/admin");
   revalidatePath("/admin/create-deal");
   revalidatePath(`/products/${id}`);
-  return { errorMessage: null };
+  return {
+    errorMessage: null,
+    successMessage: imageRemovalError
+      ? "Product details were updated, but the previous image could not be removed from storage."
+      : "Product details updated successfully.",
+    fieldErrors: {},
+  };
 }
 
 export async function deleteProductPostAction(id: string) {

@@ -127,6 +127,40 @@ test("never treats an instruction, deal label, or product code as a product name
   assert.equal(deriveProductCodeTitle(description), "Unigen WiFi Dongle 5G Az");
 });
 
+test("rejects error and rating-price lines as product names", () => {
+  const invalidTitles = [
+    "Delete/Error : 50% refund with unverified",
+    "Delete/Error : 30% refund with unverified",
+    "Ratting 39 less",
+    "Rating 39 less",
+  ];
+
+  for (const title of invalidTitles) {
+    assert.equal(isValidProductName(title), false, title);
+    assert.equal(inferProductNameFromMessage(title), "", title);
+    assert.equal(parseProductPostMessage(`Product Name: ${title}`).productName, "", title);
+  }
+
+  assert.equal(isValidProductName("Winter Jacket"), true);
+  assert.equal(isValidProductName("No Form No Refund Storage Pouch"), true);
+});
+
+test("rejects promotional headings as product names", () => {
+  const title = "PAYMENT UPDATES 🎉 & REGULAR RATTING 🥳 Deals";
+
+  assert.equal(isValidProductName(title), false);
+  assert.equal(inferProductNameFromMessage(title), "");
+  assert.equal(
+    parseProductPostMessage(`${title}\nBrand Name: Milton`).productName,
+    "",
+  );
+  assert.equal(
+    parseProductPostMessage(`${title}\nBrand Name: Milton`).brand,
+    "Milton",
+  );
+  assert.equal(isValidProductName("Milton"), true);
+});
+
 test("classifies instruction-only product-name candidates generically", () => {
   for (const instruction of [
     "Refund Form:",

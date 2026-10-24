@@ -1,5 +1,15 @@
 import { tokenizeDescription, type DescriptionPart } from "./description-links.ts";
 
+const WHATSAPP_REFERENCE_URL = "https://wa.me/917588424031";
+
+export type DealReferenceDetails = {
+  productName?: string | null;
+  brand?: string | null;
+  platform?: string | null;
+  orderPrice?: number | string | null;
+  lessPrice?: number | string | null;
+};
+
 export type DealAction = {
   url: string;
   type: "product" | "order" | "refund" | "track" | "whatsapp";
@@ -75,14 +85,18 @@ function actionPresentation(type: DealAction["type"]) {
   }
 }
 
-export function getDealActions(description: string): DealAction[] {
+export function getDealActions(
+  description: string,
+  details: DealReferenceDetails = {},
+): DealAction[] {
   const seen = new Set<string>();
   const actions: DealAction[] = [];
 
   for (const part of tokenizeDescription(description)) {
     if (part.kind !== "link") continue;
     const type = actionType(part.actionLabel ?? "Open product");
-    const key = `${type}:${canonicalUrl(part.url)}`;
+    const url = type === "whatsapp" ? WHATSAPP_REFERENCE_URL : part.url;
+    const key = `${type}:${canonicalUrl(url)}`;
     if (seen.has(key)) continue;
 
     seen.add(key);
@@ -90,7 +104,32 @@ export function getDealActions(description: string): DealAction[] {
     if (type === "product" && part.label !== part.url) {
       presentation.label = `Open ${part.label}`;
     }
-    actions.push({ url: part.url, type, ...presentation });
+    actions.push({ url, type, ...presentation });
+  }
+
+  const whatsappAction = actions.find((action) => action.type === "whatsapp");
+  if (whatsappAction) {
+    const productUrl = actions.find((action) => action.type === "product")?.url;
+    const messageLines = [
+      "Hi, I am sharing the details for my order:",
+    ];
+    if (details.productName) messageLines.push(`Product: ${details.productName}`);
+    if (details.brand) messageLines.push(`Brand: ${details.brand}`);
+    if (details.platform) messageLines.push(`Platform: ${details.platform}`);
+    if (details.orderPrice !== null && details.orderPrice !== undefined) {
+      messageLines.push(`Order price: ₹${details.orderPrice}`);
+    }
+    if (details.lessPrice !== null && details.lessPrice !== undefined) {
+      messageLines.push(`Deal price: ₹${details.lessPrice}`);
+    }
+    if (productUrl) messageLines.push(`Product link: ${productUrl}`);
+    if (description.trim()) {
+      messageLines.push("", "Full product details:", description.trim());
+    }
+
+    const url = new URL(WHATSAPP_REFERENCE_URL);
+    url.searchParams.set("text", messageLines.join("\n"));
+    whatsappAction.url = url.toString();
   }
 
   return actions;

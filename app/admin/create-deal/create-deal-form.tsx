@@ -4,7 +4,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import { createSupabaseBrowserClient } from "../../_lib/supabase-browser";
 import { parseProductPostMessage, type ProductPostMetadata } from "../../_lib/product-post-parser";
-import { createProductPostAction } from "./product-post-actions";
+import type { AdminProductPost } from "../../_lib/admin-product-posts";
+import { createProductPostAction, updateProductPostAction } from "./product-post-actions";
 import { initialCreateDealState, normalizeCreateDealState } from "./state";
 
 const acceptedTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -15,15 +16,27 @@ function numericText(value: string) {
   return value.replace(/[^0-9.-]/g, "");
 }
 
-export default function CreateDealForm() {
-  const [state, formAction, isPending] = useActionState(createProductPostAction, initialCreateDealState);
-  const [selectedStatus, setSelectedStatus] = useState<"live" | "over">("live");
+export default function CreateDealForm({ post }: { post?: AdminProductPost }) {
+  const isEditing = Boolean(post);
+  const [state, formAction, isPending] = useActionState(
+    isEditing ? updateProductPostAction : createProductPostAction,
+    initialCreateDealState,
+  );
+  const parsedMetadata = post ? parseProductPostMessage(post.description) : emptyMetadata;
+  const [selectedStatus, setSelectedStatus] = useState<"draft" | "live" | "over">(post?.status ?? "live");
   const [clientError, setClientError] = useState<string | null>(null);
-  const [description, setDescription] = useState("");
-  const [metadata, setMetadata] = useState<ProductPostMetadata>(emptyMetadata);
-  const [imageUrl, setImageUrl] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadState, setUploadState] = useState("idle");
+  const [description, setDescription] = useState(post?.description ?? "");
+  const [metadata, setMetadata] = useState<ProductPostMetadata>({
+    productName: post?.product_name ?? parsedMetadata.productName,
+    brand: post?.brand ?? parsedMetadata.brand,
+    platform: post?.platform ?? parsedMetadata.platform,
+    orderPrice: post?.order_price === null || post?.order_price === undefined ? parsedMetadata.orderPrice : String(post.order_price),
+    lessPrice: post?.less_price === null || post?.less_price === undefined ? parsedMetadata.lessPrice : String(post.less_price),
+    rating: post?.rating === null || post?.rating === undefined ? parsedMetadata.rating : String(post.rating),
+  });
+  const [imageUrl, setImageUrl] = useState(post?.image_url ?? "");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(post?.image_url ?? null);
+  const [uploadState, setUploadState] = useState(post ? "ready" : "idle");
   const [detectionState, setDetectionState] = useState<"idle" | "detecting" | "ready">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -33,7 +46,7 @@ export default function CreateDealForm() {
   const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
 
   useEffect(() => {
-    if (!safeState.successMessage) return;
+    if (!safeState.successMessage || isEditing) return;
 
     const resetTimer = window.setTimeout(() => {
       formRef.current?.reset();
@@ -49,7 +62,7 @@ export default function CreateDealForm() {
     }, 0);
 
     return () => window.clearTimeout(resetTimer);
-  }, [safeState.successMessage]);
+  }, [isEditing, safeState.successMessage]);
 
   async function uploadImage(file: File) {
     setClientError(null);
@@ -157,6 +170,8 @@ export default function CreateDealForm() {
         {safeState.fieldErrors.imageUrl && <p className="mt-2 text-xs font-medium text-rose-700">{safeState.fieldErrors.imageUrl}</p>}
       </div>
 
+      {post && <input name="postId" type="hidden" value={post.id} />}
+
       <div>
         <label className="text-sm font-bold text-slate-800" htmlFor="details">Original product description</label>
         <textarea
@@ -206,14 +221,15 @@ export default function CreateDealForm() {
       <div>
         <p className="text-sm font-bold text-slate-800">Status</p>
         <input name="status" type="hidden" value={selectedStatus} />
-        <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+        <div className={`mt-2 grid ${isEditing ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-2xl bg-slate-100 p-1`}>
+          {isEditing && <button aria-pressed={selectedStatus === "draft"} className={`h-11 rounded-xl text-xs font-extrabold tracking-[0.12em] transition ${selectedStatus === "draft" ? "bg-amber-500 text-white shadow-sm" : "text-slate-500"}`} onClick={() => setSelectedStatus("draft")} type="button">DRAFT</button>}
           <button aria-pressed={selectedStatus === "live"} className={`h-11 rounded-xl text-xs font-extrabold tracking-[0.12em] transition ${selectedStatus === "live" ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500"}`} onClick={() => setSelectedStatus("live")} type="button">LIVE · Available now</button>
           <button aria-pressed={selectedStatus === "over"} className={`h-11 rounded-xl text-xs font-extrabold tracking-[0.12em] transition ${selectedStatus === "over" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500"}`} onClick={() => setSelectedStatus("over")} type="button">OVER · Ended</button>
         </div>
         {safeState.fieldErrors.status && <p className="mt-2 text-xs font-medium text-rose-700">{safeState.fieldErrors.status}</p>}
       </div>
 
-      <button ref={publishButtonRef} className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-slate-950 px-4 text-base font-extrabold text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-950/20 disabled:cursor-not-allowed disabled:opacity-60" disabled={isPending || uploadState === "uploading"} type="submit">{isPending ? "Publishing product..." : "Publish Product"}</button>
+      <button ref={publishButtonRef} className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-slate-950 px-4 text-base font-extrabold text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-950/20 disabled:cursor-not-allowed disabled:opacity-60" disabled={isPending || uploadState === "uploading"} type="submit">{isPending ? (isEditing ? "Saving changes..." : "Publishing product...") : (isEditing ? "Save Changes" : "Publish Product")}</button>
     </form>
   );
 }
