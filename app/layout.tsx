@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DealNest | Live Deals",
-  description: "Good deals. Clear prices. Zero guesswork.",
+  title: "SAMARTH DEALS",
+  description: "SAMARTH DEALS curated product offers and deals.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

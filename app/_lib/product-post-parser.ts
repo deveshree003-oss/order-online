@@ -389,36 +389,71 @@ function valueAfterLabel(
   return value;
 }
 
-function numericValue(value: string) {
-  const normalized = value.trim();
+const priceAmountPattern = String.raw`(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(?:\/\s*[-−–])?`;
+const lessKeywordPattern = /\bless(?:\s+price)?\b/gi;
+const orderPriceKeywordPattern =
+  /\b(?:order\s+price|order\s+amount|product\s+price|deal\s+price|final\s+price|order|product)\b/gi;
+const nonPriceSuffixPattern =
+  /^\s*(?:%|slots?\b|minutes?\b|mins?\b|hours?\b|days?\b|stars?\b|\/\s*\d)/i;
 
-  if (!normalized || normalized.includes("%")) {
-    return "";
+function amountNearKeyword(line: string, keywordPattern: RegExp) {
+  const normalized = cleanLine(line);
+  keywordPattern.lastIndex = 0;
+
+  for (const match of normalized.matchAll(keywordPattern)) {
+    const keywordStart = match.index ?? 0;
+    const keywordEnd = keywordStart + match[0].length;
+    const afterKeyword = normalized.slice(keywordEnd, keywordEnd + 32);
+    const afterMatch = afterKeyword.match(
+      new RegExp(`^[\\s:;=.,!\\-–—]*${priceAmountPattern}`, "i"),
+    );
+    if (afterMatch && !nonPriceSuffixPattern.test(afterKeyword.slice(afterMatch[0].length))) {
+      return afterMatch[1].replace(/,/g, "");
+    }
+
+    const beforeKeyword = normalized.slice(Math.max(0, keywordStart - 32), keywordStart);
+    const beforeMatch = beforeKeyword.match(
+      new RegExp(`${priceAmountPattern}[\\s:;=.,!\\-–—]*$`, "i"),
+    );
+    const precedingText = beforeMatch
+      ? beforeKeyword.slice(0, beforeMatch.index)
+      : "";
+    const isLabeledNonPrice =
+      /\b(?:rating|slots?|available|date|product\s+code|sku|reference|id)\b/i.test(
+        precedingText,
+      );
+    const looksLikeDate = /[\d]\s*[/-]\s*$/.test(precedingText);
+    if (
+      beforeMatch &&
+      !isLabeledNonPrice &&
+      !looksLikeDate &&
+      !nonPriceSuffixPattern.test(normalized.slice(keywordEnd))
+    ) {
+      return beforeMatch[1].replace(/,/g, "");
+    }
   }
 
-  const match = normalized.match(
-    /(?:₹|rs\.?|inr|\$|€|£)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(?:\/-)?/i,
-  );
+  return "";
+}
 
-  return match?.[1]?.replace(/,/g, "") ?? "";
+export function extractProductPrices(message: string) {
+  const prices = { orderPrice: "", lessPrice: "" };
+
+  for (const line of message.split(/\r?\n/)) {
+    if (!prices.lessPrice) {
+      prices.lessPrice = amountNearKeyword(line, lessKeywordPattern);
+    }
+    if (!prices.orderPrice) {
+      prices.orderPrice = amountNearKeyword(line, orderPriceKeywordPattern);
+    }
+    if (prices.orderPrice && prices.lessPrice) break;
+  }
+
+  return prices;
 }
 
 function inlineLessPrice(line: string) {
-  const normalized = cleanLine(line);
-
-  const beforeLess = normalized.match(
-    /(?:₹|rs\.?|inr|\$|€|£)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s+less\b/i,
-  );
-
-  if (beforeLess) {
-    return beforeLess[1].replace(/,/g, "");
-  }
-
-  const afterLess = normalized.match(
-    /^less(?:\s+price)?\s*:?\s*(?:₹|rs\.?|inr|\$|€|£)?\s*(\d[\d,]*(?:\.\d{1,2})?)/i,
-  );
-
-  return afterLess?.[1]?.replace(/,/g, "") ?? "";
+  return amountNearKeyword(line, lessKeywordPattern);
 }
 
 /**
@@ -786,6 +821,7 @@ export function parseProductPostMessage(
   };
 
   const lines = message.split(/\r?\n/);
+  const detectedPrices = extractProductPrices(message);
 
   for (const line of lines) {
     if (!metadata.productName) {
@@ -817,26 +853,10 @@ export function parseProductPostMessage(
       );
     }
 
-    if (!metadata.orderPrice) {
-      metadata.orderPrice = numericValue(
-        valueAfterLabel(
-          line,
-          labels.orderPrice,
-        ),
-      );
-    }
-
-    if (!metadata.lessPrice) {
-      metadata.lessPrice =
-        inlineLessPrice(line) ||
-        numericValue(
-          valueAfterLabel(
-            line,
-            labels.lessPrice,
-          ),
-        );
-    }
   }
+
+  metadata.orderPrice = detectedPrices.orderPrice;
+  metadata.lessPrice = detectedPrices.lessPrice;
 
   if (!metadata.platform) {
     const productUrl = extractProductUrls(message).find(

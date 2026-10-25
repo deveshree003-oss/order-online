@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { ProductPostActionState } from "./create-deal/product-post-actions";
 
@@ -16,7 +17,12 @@ type DeleteProductPostButtonProps = {
 const initialState: ProductPostActionState = { errorMessage: null };
 
 export default function DeleteProductPostButton({ deleteAction, postId, productName }: DeleteProductPostButtonProps) {
-  const [state, formAction] = useActionState(deleteAction, initialState);
+  const router = useRouter();
+  const [state, formAction] = useActionState(async (previousState: ProductPostActionState, formData: FormData) => {
+    const result = await deleteAction(previousState, formData);
+    if (!result.errorMessage) router.refresh();
+    return result;
+  }, initialState);
   const label = productName ? `“${productName}”` : "this product post";
 
   return (
