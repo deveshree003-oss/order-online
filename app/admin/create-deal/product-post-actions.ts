@@ -6,10 +6,8 @@ import { getAdminSession } from "../../_lib/admin-auth";
 import { removeProductImage } from "../../_lib/product-image-storage";
 import { createSupabaseServerClient } from "../../_lib/supabase-server";
 import { classifySupabaseError, logSupabaseError } from "../../_lib/supabase-error";
-import { resolveProductPostMetadata } from "../../_lib/product-post-metadata";
 import {
-  cleanProductTitle,
-  isValidProductName,
+  extractProductUrls,
   nullablePrice,
   parseProductPostMessage,
 } from "../../_lib/product-post-parser";
@@ -41,6 +39,62 @@ function validHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function normalizeProductUrl(value: string) {
+  try {
+    const url = new URL(value.trim().replace(/[),.;!?]+$/, ""));
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.hash = "";
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.port =
+      (url.port === "80" && url.protocol === "http:") ||
+      (url.port === "443" && url.protocol === "https:")
+        ? ""
+        : url.port;
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function duplicateProductUrl(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  description: string,
+  excludeId?: string,
+) {
+  const urls = extractProductUrls(description).map(normalizeProductUrl).filter(
+    (url): url is string => Boolean(url),
+  );
+  if (urls.length === 0) return null;
+
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("product_posts")
+      .select("id, description")
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      logSupabaseError("Unable to check product URLs for duplicates.", error);
+      return "We could not verify whether this product link already exists. Please try again.";
+    }
+
+    for (const row of data ?? []) {
+      if (String(row.id) === excludeId) continue;
+      const existingUrls = extractProductUrls(String(row.description ?? ""))
+        .map(normalizeProductUrl)
+        .filter((url): url is string => Boolean(url));
+      if (urls.some((url) => existingUrls.includes(url))) {
+        return `This product/order link already exists in product ${String(row.id)}.`;
+      }
+    }
+
+    if ((data?.length ?? 0) < pageSize) break;
+  }
+
+  return null;
 }
 
 function validatePost(formData: FormData) {
@@ -75,40 +129,22 @@ function unauthorized(message: string): CreateDealState {
   return { errorMessage: message, successMessage: null, fieldErrors: {} };
 }
 
-function validSubmittedName(value: string) {
-  const cleaned = cleanProductTitle(value);
-  return isValidProductName(cleaned) ? cleaned : "";
-}
-
 async function metadataForPublish(formData: FormData, description: string) {
   const parsed = parseProductPostMessage(description);
-  const submittedName = validSubmittedName(textValue(formData, "productName"));
   const submittedBrand = textValue(formData, "brand");
   const submittedPlatform = textValue(formData, "platform");
   const submittedOrderPrice = priceValue(textValue(formData, "orderPrice"));
   const submittedLessPrice = priceValue(textValue(formData, "lessPrice"));
   const submittedRatingText = textValue(formData, "rating");
   const submittedRating = submittedRatingText ? Number(submittedRatingText) : null;
-  const labeledName = validSubmittedName(parsed.productName);
-  const needsRemoteName = !submittedName && !labeledName;
-  const extracted = needsRemoteName
-    ? await resolveProductPostMetadata(description)
-    : {
-        productName: "",
-        brand: null,
-        platform: null,
-        orderPrice: null,
-        lessPrice: null,
-        rating: null,
-      };
 
   return {
-    productName: submittedName || labeledName || extracted.productName,
-    brand: submittedBrand || parsed.brand || extracted.brand || "",
-    platform: submittedPlatform || parsed.platform || extracted.platform || "",
-    orderPrice: submittedOrderPrice ?? nullablePrice(parsed.orderPrice) ?? extracted.orderPrice,
-    lessPrice: submittedLessPrice ?? nullablePrice(parsed.lessPrice) ?? extracted.lessPrice,
-    rating: submittedRating ?? extracted.rating,
+    productName: "",
+    brand: submittedBrand || parsed.brand || "",
+    platform: submittedPlatform || parsed.platform || "",
+    orderPrice: submittedOrderPrice ?? nullablePrice(parsed.orderPrice),
+    lessPrice: submittedLessPrice ?? nullablePrice(parsed.lessPrice),
+    rating: submittedRating ?? null,
   };
 }
 
@@ -147,6 +183,8 @@ export async function createProductPostAction(_previousState: CreateDealState, f
   }
 
   const supabase = await createSupabaseServerClient();
+  const duplicateMessage = await duplicateProductUrl(supabase, values.description);
+  if (duplicateMessage) return unauthorized(duplicateMessage);
   const existing = await supabase
     .from("product_posts")
     .select("id")
@@ -159,6 +197,7 @@ export async function createProductPostAction(_previousState: CreateDealState, f
     const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
     if (storageBucket) await removeProductImage(supabase, values.imageUrl, storageBucket);
     revalidatePath("/");
+    revalidatePath("/admin");
     revalidatePath("/admin/create-deal");
     return { errorMessage: null, successMessage: "Product published successfully.", fieldErrors: {} };
   }
@@ -208,6 +247,7 @@ export async function createProductPostAction(_previousState: CreateDealState, f
   }
 
   revalidatePath("/");
+  revalidatePath("/admin");
   revalidatePath("/admin/create-deal");
   return { errorMessage: null, successMessage: "Product published successfully.", fieldErrors: {} };
 }
@@ -245,6 +285,8 @@ export async function updateProductPostAction(_previousState: CreateDealState, f
     return unauthorized("We could not load this product post. Check the server log for the Supabase error.");
   }
   if (!existingPost) return unauthorized("That product post could not be found.");
+  const duplicateMessage = await duplicateProductUrl(supabase, values.description, id);
+  if (duplicateMessage) return unauthorized(duplicateMessage);
   const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
   if (values.imageUrl !== existingPost.image_url && (!storageBucket || !values.imageUrl.includes(`/storage/v1/object/public/${storageBucket}/`))) {
     return unauthorized("The replacement image must be uploaded to the configured product-images bucket.");
@@ -253,7 +295,7 @@ export async function updateProductPostAction(_previousState: CreateDealState, f
   const payload = {
     image_url: values.imageUrl,
     description: values.description,
-    status: values.status,
+    status: existingPost.status,
     product_name: values.productName,
     brand: values.brand,
     platform: values.platform,
@@ -333,6 +375,30 @@ export async function markProductPostOverAction(id: string) {
   return { errorMessage: null };
 }
 
+export async function setProductPostStatusAction(
+  id: string,
+  status: "live" | "over",
+) {
+  const { user, isAuthorized } = await getAdminSession();
+  if (!user || !isAuthorized) return { errorMessage: "You are not authorized to update product posts." };
+  if (!id) return { errorMessage: "A product post id is required." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("product_posts")
+    .update({ status })
+    .eq("id", id);
+  if (error) {
+    logSupabaseError("Unable to change product post status.", error);
+    return { errorMessage: "We could not update this product post status." };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath(`/products/${id}`);
+  return { errorMessage: null };
+}
+
 export type ProductPostActionState = {
   errorMessage: string | null;
 };
@@ -347,16 +413,28 @@ export async function deleteProductPostFormAction(
 export async function markProductPostOverFormAction(formData: FormData) {
   await markProductPostOverAction(textValue(formData, "postId"));
 }
-const DEFAULT_DEAL_INFO = `*Mediator :- Samarth*
----------------------------------------------------------------
+
+export async function setProductPostStatusFormAction(formData: FormData) {
+  const id = textValue(formData, "postId");
+  const status = textValue(formData, "status");
+  if (status !== "live" && status !== "over") return;
+  await setProductPostStatusAction(id, status);
+}
+const DEFAULT_DEAL_INFO = `---
+*Mediator :- Samarth*
+
 MANDATORY to Join this For Fast
 *PAYMENT UPDATES 😇* & *REGULAR RATTING🥳* Deals 🌟
-[**https://chat.whatsapp.com/GR9V81zaR0226WSgCbN3wF**](https://chat.whatsapp.com/GR9V81zaR0226WSgCbN3wF)`;
+
+[https://chat.whatsapp.com/GR9V81zaR0226WSgCbN3wF](https://chat.whatsapp.com/GR9V81zaR0226WSgCbN3wF)
+
+`;
+
 function addDefaultDealInfo(description: string) {
   const normalized = description.toLowerCase();
 
   if (
-    normalized.includes("samarth") &&
+    normalized.includes("mediator :- samarth") &&
     normalized.includes("payment updates") &&
     normalized.includes("regular ratting") &&
     normalized.includes("chat.whatsapp.com/gr9v81zar0226wsgcbn3wf")
@@ -364,5 +442,7 @@ function addDefaultDealInfo(description: string) {
     return description;
   }
 
-  return `${description.trim()}\n\n${DEFAULT_DEAL_INFO}`;
+  const trimmedDescription = description.trim();
+  if (!trimmedDescription) return DEFAULT_DEAL_INFO;
+  return `${trimmedDescription}\n\n${DEFAULT_DEAL_INFO}`;
 }

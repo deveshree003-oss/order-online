@@ -238,23 +238,20 @@ async function normalizePost(
       validBrand || null,
 
     platform:
-      typeof row.platform === "string"
-        ? row.platform
-        : parsed.platform ||
-          (productUrl
-            ? platformFromUrl(productUrl)
-            : null) ||
-          null,
+      (productUrl ? platformFromUrl(productUrl) : "") ||
+      (typeof row.platform === "string" ? row.platform : "") ||
+      parsed.platform ||
+      null,
 
     order_price:
-      typeof row.order_price === "number" ||
+      nullablePrice(parsed.orderPrice) ??
+      (typeof row.order_price === "number" ||
       typeof row.order_price === "string"
         ? row.order_price
-        : null,
+        : null),
 
     less_price:
-      storedLessPrice ??
-      nullablePrice(parsed.lessPrice),
+      nullablePrice(parsed.lessPrice) ?? storedLessPrice,
 
     rating: validRating(row.rating),
 
@@ -302,7 +299,7 @@ export async function getPublishedProductPosts(): Promise<ProductPostsResult> {
     const primary = await supabase
       .from("product_posts")
       .select(metadataSelect)
-      .eq("status", "live")
+      .in("status", ["live", "over"])
       .order("created_at", {
         ascending: false,
       });
@@ -320,7 +317,7 @@ export async function getPublishedProductPosts(): Promise<ProductPostsResult> {
       const fallback = await supabase
         .from("product_posts")
         .select(baseSelect)
-        .eq("status", "live")
+        .in("status", ["live", "over"])
         .order("created_at", {
           ascending: false,
         });

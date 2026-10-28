@@ -33,7 +33,7 @@ export default async function EditProductPostPage({ params }: { params: Promise<
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <Link className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700" href="/admin">OrderOnline</Link>
+            <Link className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700" href="/admin">SAMARTH DEALS</Link>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Edit Product Post</h1>
             <p className="mt-2 text-sm text-slate-600">{post.product_name || "Update product details and save your changes."}</p>
           </div>

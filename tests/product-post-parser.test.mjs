@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cleanProductTitle, deriveProductCodeTitle, deriveProductNameFromUrl, inferProductNameFromMessage, isValidProductName, nullablePrice, parseProductPostMessage } from "../app/_lib/product-post-parser.ts";
+import { cleanProductTitle, deriveProductCodeTitle, deriveProductNameFromUrl, extractProductPrices, inferProductNameFromMessage, isValidProductName, nullablePrice, parseProductPostMessage } from "../app/_lib/product-post-parser.ts";
 import { resolveProductPostMetadata } from "../app/_lib/product-post-metadata.ts";
 
 const example = `https://www.amazon.in/dp/B0F53TTJF5?th=1&psc=1
@@ -33,6 +33,61 @@ test("extracts a numeric less amount while leaving missing order price absent", 
   assert.equal(metadata.orderPrice, "");
   assert.equal(nullablePrice(metadata.orderPrice), null);
   assert.equal(nullablePrice(metadata.lessPrice), 300);
+});
+
+test("detects less prices before and after the keyword with common punctuation", () => {
+  const examples = [
+    ["56 less", "56"],
+    ["less 56", "56"],
+    ["Less: 56", "56"],
+    ["Less:- 56", "56"],
+    ["Less :- 56", "56"],
+    ["Less; 56", "56"],
+    ["Less ;:- 56", "56"],
+    ["Less = 56", "56"],
+    ["56/- less", "56"],
+    ["Less ₹56", "56"],
+    ["₹56 less", "56"],
+    ["Less Rs. 56", "56"],
+    ["56 less discount", "56"],
+  ];
+
+  for (const [caption, expected] of examples) {
+    assert.equal(extractProductPrices(caption).lessPrice, expected, caption);
+  }
+});
+
+test("detects order prices independently from less prices", () => {
+  const examples = [
+    ["Order Price: 499", "499"],
+    ["Order:- ₹499", "499"],
+    ["Order Price ₹499", "499"],
+    ["₹499 Order", "499"],
+    ["499/- Order Price", "499"],
+    ["Product Price: Rs. 499", "499"],
+    ["Final Price = 499", "499"],
+    ["Deal Price :- ₹499", "499"],
+  ];
+
+  for (const [caption, expected] of examples) {
+    assert.equal(extractProductPrices(caption).orderPrice, expected, caption);
+  }
+
+  assert.deepEqual(extractProductPrices("Order Price: ₹499\n56 less"), {
+    orderPrice: "499",
+    lessPrice: "56",
+  });
+});
+
+test("does not treat rating, slots, dates, percentages, or IDs as prices", () => {
+  assert.deepEqual(
+    extractProductPrices("Rating 4.5\nAvailable slots: 10\nDate: 25/10/2026\n50% off\nProduct code: 499\nRating 4.5 less\nAvailable slots 5 less\nDate 25/10/2026 less"),
+    { orderPrice: "", lessPrice: "" },
+  );
+  assert.deepEqual(extractProductPrices("Order in 20 minutes\nLess 5 slots"), {
+    orderPrice: "",
+    lessPrice: "",
+  });
 });
 
 test("treats less phrases as the final purchase price", () => {
