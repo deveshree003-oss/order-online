@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getJayShakthiOrderFormUrl, parseJayShakthiOrderFormSlots } from "../app/_lib/order-form-slots.ts";
+import { getJayShakthiOrderFormUrl, getOrderFormPostStatus, parseJayShakthiOrderFormSlots } from "../app/_lib/order-form-slots.ts";
 
 test("finds a Jay Shakthi order form in a WhatsApp-style Markdown message", () => {
   const description = "📝 *Order Form:* [**Open**](https://deal.jayshakthimarketing.com/orderform?product_code=Unigen_WiFiDongle5g_Az\\&deal_type_id=7079\\&mediator_name=Samarth)";
@@ -35,5 +35,39 @@ test("reads the live slot data embedded in a Jay Shakthi order form", () => {
       { dealType: "Review", availableSlots: 1 },
       { dealType: "Rating", availableSlots: 0 },
     ],
+  );
+});
+
+test("chooses LIVE if any deal type still has slots", () => {
+  assert.equal(
+    getOrderFormPostStatus({
+      formUrl: "https://deal.jayshakthimarketing.com/orderform",
+      slots: [
+        { dealType: "Review", availableSlots: 0 },
+        { dealType: "Rating", availableSlots: 2 },
+      ],
+    }),
+    "live",
+  );
+});
+
+test("chooses OVER only when every deal type is sold out", () => {
+  assert.equal(
+    getOrderFormPostStatus({
+      formUrl: "https://deal.jayshakthimarketing.com/orderform",
+      slots: [
+        { dealType: "Review", availableSlots: 0 },
+        { dealType: "Rating", availableSlots: 0 },
+      ],
+    }),
+    "over",
+  );
+  assert.equal(getOrderFormPostStatus(null), null);
+  assert.equal(
+    getOrderFormPostStatus({
+      formUrl: "https://deal.jayshakthimarketing.com/orderform",
+      slots: [],
+    }),
+    null,
   );
 });

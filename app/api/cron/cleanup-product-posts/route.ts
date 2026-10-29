@@ -1,13 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import { removeProductImage } from "../../../_lib/product-image-storage";
 
 export const dynamic = "force-dynamic";
 
+function hasValidCronSecret(request: Request, cronSecret: string) {
+  const authorization = request.headers.get("authorization") ?? "";
+  return authorization === cronSecret || authorization === "Bearer " + cronSecret;
+}
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || !hasValidCronSecret(request, cronSecret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

@@ -8,32 +8,32 @@ const visualStyles: Record<
 > = {
   audio: {
     background: "from-violet-100 via-fuchsia-50 to-white",
-    label: "Audio deal placeholder",
+    label: "Audio deal",
     graphic: "◖◗",
   },
   mobile: {
     background: "from-sky-100 via-cyan-50 to-white",
-    label: "Mobile phone deal placeholder",
+    label: "Mobile phone deal",
     graphic: "▯",
   },
   kitchen: {
     background: "from-orange-100 via-amber-50 to-white",
-    label: "Coffee machine deal placeholder",
+    label: "Coffee machine deal",
     graphic: "◒",
   },
   gaming: {
     background: "from-indigo-100 via-blue-50 to-white",
-    label: "Gaming console deal placeholder",
+    label: "Gaming console deal",
     graphic: "⌁",
   },
   home: {
     background: "from-emerald-100 via-teal-50 to-white",
-    label: "Home appliance deal placeholder",
+    label: "Home appliance deal",
     graphic: "⌇",
   },
   travel: {
     background: "from-rose-100 via-pink-50 to-white",
-    label: "Luggage deal placeholder",
+    label: "Luggage deal",
     graphic: "▣",
   },
 };

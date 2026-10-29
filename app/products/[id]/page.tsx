@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import DescriptionWithLinks from "../../_components/description-with-links";
-import { getDealActions } from "../../_lib/deal-detail";
+import { extractDealInformation, getDealActions } from "../../_lib/deal-detail";
 import { formatDate, formatPrice } from "../../_lib/formatters";
 import { getPublishedProductPost } from "../../_lib/product-posts";
 import { extractProductUrls } from "../../_lib/product-post-parser";
@@ -70,12 +70,19 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
   const orderPrice = numericPrice(post.order_price);
   const lessPrice = numericPrice(post.less_price);
   const isLive = post.status === "live";
-  const slotSummary = post.order_form_slots?.slots[0] ?? null;
+  const slotSummaries = post.order_form_slots?.slots ?? [];
+  const hasAvailableSlots = slotSummaries.some((slot) => slot.availableSlots > 0);
+  const dealInformation = extractDealInformation(post.description);
+  const structuredInformation = [
+    ["Platform", post.platform ?? dealInformation.platform],
+    ["Brand", post.brand ?? dealInformation.brand],
+    ["Mediator", dealInformation.mediator],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
   const caption = post.description.replace(
     /(\n\s*)Important:\s*$/i,
     (marker) =>
       post.description.includes(
-        "https://chat.whatsapp.com/GR9V81zaR0226WSgCbN3wF",
+        "https://chat.whatsapp.com/JMCUytJhLIV4dNTiCwxwVK",
       )
         ? ""
         : marker,
@@ -112,9 +119,11 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
               {orderPrice !== null && <div className="min-w-0 rounded-2xl bg-slate-50 p-3 sm:p-4"><dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs">Order price</dt><dd className="mt-2 break-words text-xl font-black sm:text-2xl">{formatPrice(orderPrice)}</dd></div>}
               {lessPrice !== null && <div className="min-w-0 rounded-2xl bg-emerald-50 p-3 sm:p-4"><dt className="text-[10px] font-black uppercase tracking-wide text-emerald-700 sm:text-xs">Less price</dt><dd className="mt-2 break-words text-2xl font-black text-emerald-700 sm:text-3xl">{formatPrice(lessPrice)}</dd></div>}
             </dl>}
-            {slotSummary && <section className={`mt-5 rounded-2xl border p-4 sm:mt-6 sm:p-5 ${slotSummary.availableSlots > 0 ? "border-sky-200 bg-sky-50" : "border-rose-200 bg-rose-50"}`}>
-              <h2 className={`text-xs font-black uppercase tracking-[0.12em] sm:text-sm sm:tracking-[0.14em] ${slotSummary.availableSlots > 0 ? "text-sky-800" : "text-rose-800"}`}>Available slots</h2>
-              <p className="mt-2 text-lg font-black text-slate-950">{slotSummary.availableSlots}</p>
+            {slotSummaries.length > 0 && <section className={`mt-5 rounded-2xl border p-4 sm:mt-6 sm:p-5 ${hasAvailableSlots ? "border-sky-200 bg-sky-50" : "border-rose-200 bg-rose-50"}`}>
+              <h2 className={`text-xs font-black uppercase tracking-[0.12em] sm:text-sm sm:tracking-[0.14em] ${hasAvailableSlots ? "text-sky-800" : "text-rose-800"}`}>Live order-form availability</h2>
+              <ul className="mt-2 space-y-1">
+                {slotSummaries.map((slot) => <li className="text-lg font-black text-slate-950" key={slot.dealType}>{slot.dealType}: {slot.availableSlots} {slot.availableSlots === 1 ? "slot" : "slots"} left</li>)}
+              </ul>
               <p className="mt-1 text-sm leading-6 text-slate-600">Checked directly from the order form.</p>
             </section>}
             <QuickActions
@@ -125,6 +134,16 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
               platform={post.platform}
               productName={null}
             />
+            {dealInformation.instruction && <section className="mt-5 rounded-2xl border border-amber-200 bg-[#fffaf0] p-3 sm:mt-8 sm:p-5">
+              <h2 className="text-xs font-black uppercase tracking-[0.12em] text-amber-800 sm:text-sm sm:tracking-[0.14em]">Important deal instruction</h2>
+              <p className="mt-1.5 text-sm font-semibold leading-5 text-amber-950 sm:mt-2 sm:leading-6">{dealInformation.instruction}</p>
+            </section>}
+            {structuredInformation.length > 0 && <section className="mt-6 hidden border-t border-slate-100 pt-5 sm:mt-8 sm:block sm:pt-6">
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">Deal information</h2>
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                {structuredInformation.map(([label, value]) => <div className="rounded-2xl border border-slate-200 bg-[#f8f9fb] p-4" key={label}><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-base font-bold text-slate-950">{value}</dd></div>)}
+              </dl>
+            </section>}
             <section className="mt-8 border-t border-slate-100 pt-6">
               <h2 className="text-lg font-black text-slate-950">Original deal details</h2>
               <a

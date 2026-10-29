@@ -50,26 +50,26 @@ export default function ProductPostSlotCount({
 
   if (!formUrl) return null;
 
-  const slotCount = availability?.slots[0]?.availableSlots;
-
   return (
-    <p
-      aria-live="polite"
-      className={`${className} w-fit rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide md:text-xs ${
-        slotCount !== undefined
-          ? slotCount > 0
-            ? "bg-sky-100 text-sky-800"
-            : "bg-rose-50 text-rose-700"
-          : "bg-slate-100 text-slate-600"
-      }`}
-    >
-      {slotCount !== undefined
-        ? slotCount > 0
-          ? `${slotCount} slots left`
-          : "No slots left"
-        : unavailable
-          ? "Slots unavailable"
-          : "Checking slots…"}
-    </p>
+    <div aria-live="polite" className={`${className} flex flex-wrap gap-1.5`}>
+      {availability
+        ? availability.slots.map((slot) => (
+            <span
+              className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide md:text-xs ${
+                slot.availableSlots > 0
+                  ? "bg-sky-100 text-sky-800"
+                  : "bg-rose-50 text-rose-700"
+              }`}
+              key={slot.dealType}
+            >
+              {slot.dealType}: {slot.availableSlots} {slot.availableSlots === 1 ? "slot" : "slots"}
+            </span>
+          ))
+        : (
+            <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600 md:text-xs">
+              {unavailable ? "Slots unavailable" : "Checking slots…"}
+            </span>
+          )}
+    </div>
   );
 }

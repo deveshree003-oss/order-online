@@ -110,7 +110,6 @@ export async function getPublishedDeals(): Promise<PublishedDealsResult> {
     return { deals, errorMessage: null };
   } catch (error) {
     console.error("Unable to load published deals from Supabase.", error);
-
     return {
       deals: [],
       errorMessage: "We could not load live deals right now. Please try again shortly.",
