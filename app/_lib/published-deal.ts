@@ -91,7 +91,6 @@ export async function getPublishedDeal(id: string): Promise<PublishedDeal | null
     };
   } catch (error) {
     console.error("Unable to load published deal from Supabase.", error);
-
     return null;
   }
 }

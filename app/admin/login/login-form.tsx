@@ -33,6 +33,7 @@ export default function LoginForm() {
       .eq("is_active", true)
       .maybeSingle();
 
+    setIsLoading(false);
     router.replace(!authorizationError && adminUser ? "/admin" : "/admin/access-denied");
     router.refresh();
   }

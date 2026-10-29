@@ -8,6 +8,15 @@ export type OrderFormSlotAvailability = {
   slots: OrderFormSlot[];
 };
 
+export function getOrderFormPostStatus(
+  availability: OrderFormSlotAvailability | null,
+): "live" | "over" | null {
+  if (!availability || availability.slots.length === 0) return null;
+  return availability.slots.some((slot) => slot.availableSlots > 0)
+    ? "live"
+    : "over";
+}
+
 const jayShakthiOrderFormHost = "deal.jayshakthimarketing.com";
 const requestTimeoutMs = 5_000;
 const maximumResponseLength = 1_000_000;

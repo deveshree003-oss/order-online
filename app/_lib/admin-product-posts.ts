@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "./supabase-server.ts";
 import { classifySupabaseError, logSupabaseError } from "./supabase-error.ts";
 import { cleanProductTitle, deriveProductNameFromUrl, extractProductUrls, inferProductNameFromMessage, isValidProductName, parseProductPostMessage, platformFromUrl } from "./product-post-parser.ts";
+import { normalizeWhatsAppGroupLink } from "./whatsapp-group-link.ts";
 
 export type AdminProductPost = {
   id: string;
@@ -27,7 +28,7 @@ const baseSelect = "id, image_url, description, status, created_at, updated_at";
 const metadataSelect = "id, image_url, description, product_name, brand, platform, order_price, less_price, status, created_at, updated_at, published_at, rating";
 
 async function normalizePost(row: Record<string, unknown>): Promise<AdminProductPost> {
-  const description = String(row.description);
+  const description = normalizeWhatsAppGroupLink(String(row.description));
   const parsed = parseProductPostMessage(description);
   const urls = extractProductUrls(description);
   const productUrl = urls.find((url) => platformFromUrl(url)) ?? urls[0];

@@ -15,6 +15,7 @@ import {
   extractProductUrls,
 } from "./product-post-parser.ts";
 import { resolveProductPostMetadata } from "./product-post-metadata.ts";
+import { normalizeWhatsAppGroupLink } from "./whatsapp-group-link.ts";
 
 export type ProductPost = {
   id: string;
@@ -74,7 +75,7 @@ async function normalizePost(
     includeOrderFormSlots?: boolean;
   } = {},
 ): Promise<ProductPost> {
-  const description = String(row.description);
+  const description = normalizeWhatsAppGroupLink(String(row.description));
 
   const parsed = parseProductPostMessage(description);
 
@@ -332,7 +333,7 @@ export async function getPublishedProductPosts(): Promise<ProductPostsResult> {
     if (error) {
       return {
         posts: [],
-        errorMessage: null,
+        errorMessage: "We could not load live deals right now. Please try again shortly.",
       };
     }
 
@@ -346,10 +347,11 @@ export async function getPublishedProductPosts(): Promise<ProductPostsResult> {
       ),
       errorMessage: null,
     };
-  } catch {
+  } catch (error) {
+    console.error("Unable to load live product posts.", error);
     return {
       posts: [],
-      errorMessage: null,
+      errorMessage: "We could not load live deals right now. Please try again shortly.",
     };
   }
 }
