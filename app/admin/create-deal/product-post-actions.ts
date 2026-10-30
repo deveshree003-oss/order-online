@@ -10,10 +10,6 @@ import {
   nullablePrice,
   parseProductPostMessage,
 } from "../../_lib/product-post-parser";
-import {
-  normalizeWhatsAppGroupLink,
-  whatsappGroupLink,
-} from "../../_lib/whatsapp-group-link";
 import type { CreateDealState } from "./state";
 
 const postStatuses = ["draft", "live", "over"] as const;
@@ -111,11 +107,10 @@ export async function createProductPostAction(_previousState: CreateDealState, f
   if (!isAuthorized) return unauthorized("You are not authorized to publish product posts.");
 
   const description = rawTextValue(formData, "details");
-  const finalDescription = addDefaultDealInfo(description);
-  const extracted = await metadataForPublish(formData, finalDescription);
+  const extracted = await metadataForPublish(formData, description);
   const enriched = new FormData();
   for (const [name, value] of formData.entries()) enriched.append(name, value);
-  enriched.set("details", finalDescription);
+  enriched.set("details", description);
   enriched.set("productName", extracted.productName);
   enriched.set("brand", extracted.brand ?? "");
   enriched.set("platform", extracted.platform ?? "");
@@ -205,11 +200,10 @@ export async function updateProductPostAction(_previousState: CreateDealState, f
 
   const id = textValue(formData, "postId");
   const description = rawTextValue(formData, "details");
-  const finalDescription = addDefaultDealInfo(description);
-  const extracted = await metadataForPublish(formData, finalDescription);
+  const extracted = await metadataForPublish(formData, description);
   const enriched = new FormData();
   for (const [name, value] of formData.entries()) enriched.append(name, value);
-  enriched.set("details", finalDescription);
+  enriched.set("details", description);
   enriched.set("productName", extracted.productName);
   enriched.set("brand", extracted.brand ?? "");
   enriched.set("platform", extracted.platform ?? "");
@@ -328,17 +322,24 @@ export async function setProductPostStatusAction(
   if (!id) return { errorMessage: "A product post id is required." };
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data: updatedPost, error } = await supabase
     .from("product_posts")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
   if (error) {
     logSupabaseError("Unable to change product post status.", error);
     return { errorMessage: "We could not update this product post status." };
   }
+  if (!updatedPost) {
+    logSupabaseError("Product post status update returned no row.", { code: "UPDATE_NO_ROW", message: `No product post matched id ${id}.` });
+    return { errorMessage: "That product post could not be found." };
+  }
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/create-deal");
   revalidatePath(`/products/${id}`);
   return { errorMessage: null };
 }
@@ -362,32 +363,4 @@ export async function setProductPostStatusFormAction(formData: FormData) {
   const status = textValue(formData, "status");
   if (status !== "live" && status !== "over") return;
   await setProductPostStatusAction(id, status);
-}
-
-const DEFAULT_DEAL_INFO = `---
-*Mediator :- Samarth*
-
-MANDATORY to Join this For Fast
-*PAYMENT UPDATES 😇* & *REGULAR RATTING🥳* Deals 🌟
-
-${whatsappGroupLink}
-
-`;
-
-function addDefaultDealInfo(description: string) {
-  const normalizedDescription = normalizeWhatsAppGroupLink(description);
-  const normalized = normalizedDescription.toLowerCase();
-
-  if (
-    normalized.includes("mediator :- samarth") &&
-    normalized.includes("payment updates") &&
-    normalized.includes("regular ratting") &&
-    normalized.includes("chat.whatsapp.com/jmcuytjhliv4dnticwxwvk")
-  ) {
-    return normalizedDescription;
-  }
-
-  const trimmedDescription = normalizedDescription.trim();
-  if (!trimmedDescription) return DEFAULT_DEAL_INFO;
-  return `${trimmedDescription}\n\n${DEFAULT_DEAL_INFO}`;
 }

@@ -1,19 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { OrderFormSlotAvailability } from "../_lib/order-form-slots";
+import { getOrderFormPostStatus, type OrderFormSlotAvailability } from "../_lib/order-form-slots";
 
 export default function ProductPostSlotCount({
   formUrl,
   className = "mt-2",
+  currentStatus,
+  onStatusDetected,
 }: {
   formUrl: string | null;
   className?: string;
+  currentStatus?: "draft" | "live" | "over";
+  onStatusDetected?: (status: "live" | "over") => void;
 }) {
   const [availability, setAvailability] =
     useState<OrderFormSlotAvailability | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const onStatusDetectedRef = useRef(onStatusDetected);
+
+  useEffect(() => {
+    onStatusDetectedRef.current = onStatusDetected;
+  }, [onStatusDetected]);
 
   useEffect(() => {
     if (!formUrl) return;
@@ -38,6 +47,10 @@ export default function ProductPostSlotCount({
         };
         setAvailability(result.slots);
         setUnavailable(!result.slots);
+        const detectedStatus = getOrderFormPostStatus(result.slots);
+        if (detectedStatus && detectedStatus !== currentStatus) {
+          onStatusDetectedRef.current?.(detectedStatus);
+        }
       } catch {
         if (!controller.signal.aborted) setUnavailable(true);
       }
@@ -46,7 +59,7 @@ export default function ProductPostSlotCount({
     void loadSlots();
 
     return () => controller.abort();
-  }, [formUrl]);
+  }, [currentStatus, formUrl]);
 
   if (!formUrl) return null;
 

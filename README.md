@@ -24,6 +24,10 @@ npm run dev
 
 Configure the required Supabase environment variables in `.env.local` before starting the application.
 
+## Supabase migrations
+
+Apply the SQL files in `supabase/migrations` to the project database in timestamp order. `20261030_add_product_post_serial_number.sql` backfills stable serial numbers for existing product posts and configures numbers for future posts. `20261030_enable_product_posts_realtime.sql` enables immediate viewer refreshes after product changes when the Supabase Realtime publication is available. Admin and viewer listings use the same persisted serial value.
+
 ## Future Enhancements
 - Visitor analytics and product interaction tracking.
 - An admin dashboard for measuring platform usage and impact.

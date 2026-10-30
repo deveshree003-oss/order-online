@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import DescriptionWithLinks from "../../_components/description-with-links";
 import { extractDealInformation, getDealActions } from "../../_lib/deal-detail";
 import { formatDate, formatPrice } from "../../_lib/formatters";
 import { getPublishedProductPost } from "../../_lib/product-posts";
-import { extractProductUrls } from "../../_lib/product-post-parser";
+import { firstProductOrderLink } from "../../_lib/product-links";
 import { numericPrice } from "../../_lib/pricing";
+import { whatsappGroupLink } from "../../_lib/whatsapp-group-link";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ function QuickActions({
   platform,
   orderPrice,
   lessPrice,
+  mediator,
 }: {
   description: string;
   productName: string | null;
@@ -24,6 +25,7 @@ function QuickActions({
   platform: string | null;
   orderPrice: number | string | null;
   lessPrice: number | string | null;
+  mediator: string | null;
 }) {
   const actions = getDealActions(description, {
     productName,
@@ -31,6 +33,7 @@ function QuickActions({
     platform,
     orderPrice,
     lessPrice,
+    mediator,
   }).filter((action) => action.type !== "whatsapp");
 
   if (actions.length === 0) return null;
@@ -70,30 +73,22 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
   const orderPrice = numericPrice(post.order_price);
   const lessPrice = numericPrice(post.less_price);
   const isLive = post.status === "live";
-  const slotSummaries = post.order_form_slots?.slots ?? [];
-  const hasAvailableSlots = slotSummaries.some((slot) => slot.availableSlots > 0);
   const dealInformation = extractDealInformation(post.description);
+  const productLink = firstProductOrderLink(post.description);
+  const platformName = post.platform?.trim() || productLink?.platform || "Platform not specified";
   const structuredInformation = [
-    ["Platform", post.platform ?? dealInformation.platform],
+    ["Platform", platformName],
     ["Brand", post.brand ?? dealInformation.brand],
     ["Mediator", dealInformation.mediator],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
-  const caption = post.description.replace(
-    /(\n\s*)Important:\s*$/i,
-    (marker) =>
-      post.description.includes(
-        "https://chat.whatsapp.com/JMCUytJhLIV4dNTiCwxwVK",
-      )
-        ? ""
-        : marker,
-  );
-  const productOrderUrl = post.order_form_url ?? extractProductUrls(caption)[0] ?? null;
-  const whatsappMessage = [
-    caption,
-    "",
-    `Reference: ${post.id}`,
-    ...(productOrderUrl ? [`Product/order link: ${productOrderUrl}`] : []),
-  ].join("\n");
+  const caption = post.description;
+  const hasGroupLink = /https?:\/\/chat\.whatsapp\.com\//i.test(caption);
+  const hasMediator = /^\s*mediator(?:\s+name)?\s*[:-]/im.test(caption);
+  const additionalWhatsAppDetails = [
+    !hasMediator ? `Mediator: ${dealInformation.mediator ?? "Samarth"}` : null,
+    !hasGroupLink ? whatsappGroupLink : null,
+  ].filter((line): line is string => Boolean(line));
+  const whatsappMessage = [caption, ...(additionalWhatsAppDetails.length ? ["", ...additionalWhatsAppDetails] : [])].join("\n");
   const whatsappUrl = new URL("https://wa.me/917588424031");
   whatsappUrl.searchParams.set("text", whatsappMessage);
   return (
@@ -106,26 +101,33 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
           <div className="relative flex min-h-64 items-center justify-center bg-gradient-to-br from-slate-100 via-[#f8f7fb] to-[#eef5f5] p-5 sm:min-h-[34rem] sm:p-8">
             <img alt="Product image" className="max-h-[32rem] w-full object-contain" src={post.image_url} />
             <div className="absolute left-5 top-5 flex flex-wrap gap-2">
+              <span className="rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-black text-slate-800">#{post.serial_number ?? "—"}</span>
               <span className={`rounded-full px-3 py-1.5 text-[10px] font-black tracking-[0.13em] ${isLive ? "bg-emerald-500 text-white" : "bg-slate-800 text-white"}`}>{isLive ? "LIVE" : "OVER"}</span>
+              <span className="rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-black text-slate-800">{platformName}</span>
+              {productLink && (
+                <a
+                  aria-label={`Open ${platformName} product link`}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-sm"
+                  href={productLink.url}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  🔥
+                </a>
+              )}
             </div>
           </div>
           <div className="min-w-0 p-4 sm:p-10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">{isLive ? "Available now" : "Deal ended"}</p>
+                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{post.product_name || "Product deal"}</h1>
               </div>
             </div>
             {(orderPrice !== null || lessPrice !== null) && <dl className="mt-6 grid grid-cols-2 gap-2 border-y border-slate-100 py-4 sm:mt-8 sm:gap-3 sm:py-5 sm:grid-cols-3">
               {orderPrice !== null && <div className="min-w-0 rounded-2xl bg-slate-50 p-3 sm:p-4"><dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs">Order price</dt><dd className="mt-2 break-words text-xl font-black sm:text-2xl">{formatPrice(orderPrice)}</dd></div>}
               {lessPrice !== null && <div className="min-w-0 rounded-2xl bg-emerald-50 p-3 sm:p-4"><dt className="text-[10px] font-black uppercase tracking-wide text-emerald-700 sm:text-xs">Less price</dt><dd className="mt-2 break-words text-2xl font-black text-emerald-700 sm:text-3xl">{formatPrice(lessPrice)}</dd></div>}
             </dl>}
-            {slotSummaries.length > 0 && <section className={`mt-5 rounded-2xl border p-4 sm:mt-6 sm:p-5 ${hasAvailableSlots ? "border-sky-200 bg-sky-50" : "border-rose-200 bg-rose-50"}`}>
-              <h2 className={`text-xs font-black uppercase tracking-[0.12em] sm:text-sm sm:tracking-[0.14em] ${hasAvailableSlots ? "text-sky-800" : "text-rose-800"}`}>Live order-form availability</h2>
-              <ul className="mt-2 space-y-1">
-                {slotSummaries.map((slot) => <li className="text-lg font-black text-slate-950" key={slot.dealType}>{slot.dealType}: {slot.availableSlots} {slot.availableSlots === 1 ? "slot" : "slots"} left</li>)}
-              </ul>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Checked directly from the order form.</p>
-            </section>}
             <QuickActions
               brand={post.brand}
               description={post.description}
@@ -133,12 +135,9 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
               orderPrice={post.order_price}
               platform={post.platform}
               productName={null}
+              mediator={dealInformation.mediator}
             />
-            {dealInformation.instruction && <section className="mt-5 rounded-2xl border border-amber-200 bg-[#fffaf0] p-3 sm:mt-8 sm:p-5">
-              <h2 className="text-xs font-black uppercase tracking-[0.12em] text-amber-800 sm:text-sm sm:tracking-[0.14em]">Important deal instruction</h2>
-              <p className="mt-1.5 text-sm font-semibold leading-5 text-amber-950 sm:mt-2 sm:leading-6">{dealInformation.instruction}</p>
-            </section>}
-            {structuredInformation.length > 0 && <section className="mt-6 hidden border-t border-slate-100 pt-5 sm:mt-8 sm:block sm:pt-6">
+            {structuredInformation.length > 0 && <section className="mt-6 border-t border-slate-100 pt-5 sm:mt-8 sm:pt-6">
               <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">Deal information</h2>
               <dl className="mt-3 grid gap-3 sm:grid-cols-2">
                 {structuredInformation.map(([label, value]) => <div className="rounded-2xl border border-slate-200 bg-[#f8f9fb] p-4" key={label}><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-base font-bold text-slate-950">{value}</dd></div>)}
@@ -146,6 +145,10 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
             </section>}
             <section className="mt-8 border-t border-slate-100 pt-6">
               <h2 className="text-lg font-black text-slate-950">Original deal details</h2>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {!hasMediator && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Mediator</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{dealInformation.mediator ?? "Samarth"}</dd></div>}
+                {!hasGroupLink && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">WhatsApp group</dt><dd className="mt-1 text-sm font-semibold"><a className="text-emerald-700 underline underline-offset-2" href={whatsappGroupLink} rel="noopener noreferrer" target="_blank">Join the group</a></dd></div>}
+              </dl>
               <a
                 className="mt-4 flex min-h-14 w-full items-center justify-center rounded-full bg-[#25D366] px-5 text-center text-sm font-black tracking-wide text-white shadow-md transition hover:bg-[#1da851] focus:outline-none focus:ring-4 focus:ring-emerald-500/25 sm:min-h-16 sm:text-base"
                 href={whatsappUrl.toString()}
@@ -155,7 +158,7 @@ export default async function ProductPostPage({ params }: { params: Promise<{ id
                 WhatsApp Reference [MANDATORY]
               </a>
               <div className="mt-3 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-[#fbfbfd] p-2 sm:p-6">
-                <DescriptionWithLinks description={caption} />
+                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 sm:text-base sm:leading-7">{caption}</p>
               </div>
             </section>
             <p className="mt-8 text-sm text-slate-500">Posted {formatDate(post.created_at)}</p>

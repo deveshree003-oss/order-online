@@ -17,6 +17,7 @@ const genericProductNames = new Set([
   "order links",
   "order link",
   "order form",
+  "orderform",
   "fill order form",
   "general form",
   "exchange",
@@ -292,7 +293,7 @@ export function isValidProductName(value: string) {
   if (isOperationalInstructionSentence(normalized)) return false;
 
   if (
-    /^(?:review(?:\s+deal|\s+29)?|deal|offer|order(?:\s+link|\s+links)?|order\s+form|fill\s+order\s+form|general\s+form|exchange(?:\s+deal)?|ratings?(?:\s+deal)?|rating|amazon|firstcry|flipkart|myntra|meesho|any\s+size|any\s+color|any\s+colour)$/i.test(
+    /^(?:review(?:\s+deal|\s+29)?|deal|offer|order(?:\s+link|\s+links)?|order\s*form|fill\s+order\s+form|general\s+form|exchange(?:\s+deal)?|ratings?(?:\s+deal)?|rating|amazon|firstcry|flipkart|myntra|meesho|any\s+size|any\s+color|any\s+colour)$/i.test(
       normalized,
     )
   ) {
@@ -348,6 +349,7 @@ function decodeHtmlEntities(value: string) {
 
 function cleanLine(line: string) {
   return decodeHtmlEntities(line)
+    .replace(/\uFFFD/g, "")
     .replace(/\\\*{1,2}/g, "")
     .replace(/[*_`]/g, "")
     .replace(/^[\s>*#•▪◦-]+/, "")
@@ -501,6 +503,7 @@ export function platformFromUrl(value: string) {
     const platforms: Array<[string, string]> = [
       ["amazon.in", "Amazon"],
       ["amzn.in", "Amazon"],
+      ["fkrt.it", "Flipkart"],
       ["amazon.com", "Amazon"],
       ["flipkart.com", "Flipkart"],
       ["myntra.com", "Myntra"],
@@ -515,6 +518,11 @@ export function platformFromUrl(value: string) {
       ["firstcry.com", "FirstCry"],
       ["purplle.com", "Purplle"],
       ["shopclues.com", "ShopClues"],
+      ["blinkit.com", "Blinkit"],
+      ["bigbasket.com", "BigBasket"],
+      ["zeptonow.com", "Zepto"],
+      ["swiggy.com", "Swiggy Instamart"],
+      ["deal.jayshakthimarketing.com", "Jayshakthi Deal"],
     ];
 
     return (

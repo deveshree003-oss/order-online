@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AdminProductPost } from "../_lib/admin-product-posts";
@@ -10,6 +10,11 @@ import {
   deleteProductPostFormAction,
   setProductPostStatusAction,
 } from "./create-deal/product-post-actions";
+import { getJayShakthiOrderFormUrl } from "../_lib/order-form-slots";
+import { firstProductOrderLink } from "../_lib/product-links";
+import { formatPrice } from "../_lib/formatters";
+import { numericPrice } from "../_lib/pricing";
+import ProductPostSlotCount from "../_components/product-post-slot-count";
 
 function StatusButton({
   postId,
@@ -42,7 +47,7 @@ function StatusButton({
         onClick={updateStatus}
         type="button"
       >
-        {isPending ? "Updating..." : status === "over" ? "Mark over" : "Mark live"}
+        {isPending ? "Updating..." : status === "over" ? "Make OVER" : "Make LIVE"}
       </button>
       {errorMessage && <span className="w-full text-xs text-rose-700">{errorMessage}</span>}
     </>
@@ -59,6 +64,8 @@ export default function AdminProductManager({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [autoStatusError, setAutoStatusError] = useState<string | null>(null);
+  const statusUpdatesInProgress = useRef(new Set<string>());
   const normalizedQuery = query.trim().toLowerCase();
   const editingPost = posts.find((post) => post.id === editingPostId) ?? null;
   const matchesSearch = useCallback((post: AdminProductPost) => {
@@ -90,30 +97,82 @@ export default function AdminProductManager({
     setEditingPostId(null);
     router.refresh();
   }, [router]);
+  const syncAutoDetectedStatus = useCallback(async (
+    postId: string,
+    status: "live" | "over",
+  ) => {
+    if (statusUpdatesInProgress.current.has(postId)) return;
+    statusUpdatesInProgress.current.add(postId);
+    try {
+      const result = await setProductPostStatusAction(postId, status);
+      if (result.errorMessage) {
+        setAutoStatusError(result.errorMessage);
+        return;
+      }
+      setAutoStatusError(null);
+      router.refresh();
+    } catch (error) {
+      setAutoStatusError(
+        error instanceof Error
+          ? error.message
+          : "The automatically detected product status could not be updated.",
+      );
+    } finally {
+      statusUpdatesInProgress.current.delete(postId);
+    }
+  }, [router]);
 
   function renderProducts(products: AdminProductPost[]) {
-    return products.map((post) => (
-      <div
-        className="flex flex-col gap-4 border-b border-slate-100 py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+    return products.map((post) => {
+      const formUrl = getJayShakthiOrderFormUrl(post.description);
+      const productLink = firstProductOrderLink(post.description);
+      const platform = post.platform?.trim() || productLink?.platform || "Platform not specified";
+
+      return (
+      <article
+        className="my-3 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
         key={post.id}
       >
-        <div className="flex min-w-0 items-center gap-4">
-          <img
-            alt=""
-            className="h-16 w-16 shrink-0 rounded-xl bg-slate-100 object-contain"
-            src={post.image_url}
-          />
-          <div className="min-w-0">
-            <p className="line-clamp-2 whitespace-pre-wrap text-sm font-medium text-slate-900">
-              {post.description}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {post.platform || "Platform not detected"}
-              {post.order_price !== null ? ` · Order ${post.order_price}` : ""}
-              {post.less_price !== null ? ` · Less ${post.less_price}` : ""}
-              {` · ${post.id}`}
-            </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-800">
+              #{post.serial_number ?? "—"}
+            </span>
+            <h4 className="min-w-0 break-words text-sm font-bold text-slate-950">
+              {post.product_name || "Product"}
+            </h4>
+            {numericPrice(post.order_price) !== null && (
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800">
+                Order {formatPrice(post.order_price)}
+              </span>
+            )}
+            {numericPrice(post.less_price) !== null && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                Less {formatPrice(post.less_price)}
+              </span>
+            )}
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">{platform}</span>
+            {productLink && (
+              <a
+                aria-label={`Open ${platform} product link`}
+                className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-black text-blue-800 transition hover:bg-blue-200"
+                href={productLink.url}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                🔥
+              </a>
+            )}
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black tracking-wide ${post.status === "live" ? "bg-emerald-100 text-emerald-800" : post.status === "over" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-800"}`}>
+              {post.status.toUpperCase()}
+            </span>
           </div>
+          <ProductPostSlotCount
+            className="mt-2"
+            currentStatus={post.status}
+            formUrl={formUrl}
+            onStatusDetected={(status) => void syncAutoDetectedStatus(post.id, status)}
+          />
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
@@ -131,7 +190,9 @@ export default function AdminProductManager({
           >
             Edit
           </button>
-          {post.status === "live" ? (
+          {post.status === "over" && formUrl ? (
+            <span className="rounded-xl bg-slate-200 px-3 py-2 text-xs font-black text-slate-700">OVER</span>
+          ) : post.status === "live" ? (
             <StatusButton postId={post.id} status="over" />
           ) : (
             <StatusButton postId={post.id} status="live" />
@@ -142,8 +203,9 @@ export default function AdminProductManager({
             productName={null}
           />
         </div>
-      </div>
-    ));
+      </article>
+      );
+    });
   }
 
   const matchCount = livePosts.length + overPosts.length + draftPosts.length;
@@ -154,11 +216,9 @@ export default function AdminProductManager({
         className="mt-8 scroll-mt-6 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8"
         id="publish-product-form"
       >
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Publish</p>
-        <h2 className="mt-3 text-2xl font-black tracking-tight">
-          {editingPost ? "Edit product" : "Publish a new deal"}
-        </h2>
-        {editingPost && (
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">{editingPost ? "Edit" : "Publish"}</p>
+          <h2 className="mt-3 text-2xl font-black tracking-tight">{editingPost ? "Edit product" : "Publish a product"}</h2>
+          {editingPost && (
           <button
             className="mt-2 text-sm font-bold text-slate-600 underline underline-offset-4 hover:text-slate-950"
             onClick={() => setEditingPostId(null)}
@@ -166,20 +226,23 @@ export default function AdminProductManager({
           >
             Cancel editing
           </button>
-        )}
-        <div className="mt-5">
+          )}
           <CreateDealForm
             key={editingPost?.id ?? "new-product"}
             onSaved={onSaved}
             post={editingPost ?? undefined}
             posts={posts}
           />
-        </div>
       </section>
 
       <section className="mt-8 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Published products</p>
-        <h2 className="mt-3 text-2xl font-black tracking-tight">Manage products</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Published products</p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight">Manage products</h2>
+          </div>
+        </div>
+        {autoStatusError && <p aria-live="polite" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{autoStatusError}</p>}
         <label className="relative mt-5 block w-full">
           <span className="sr-only">Search managed products</span>
           <svg
@@ -194,7 +257,7 @@ export default function AdminProductManager({
             <path strokeLinecap="round" d="m20 20-4.35-4.35" />
           </svg>
           <input
-            className="h-12 w-full rounded-2xl border border-slate-200 bg-[#f8fafc] py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-500 hover:border-emerald-300 focus:border-emerald-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(16,185,129,0.14)]"
+            className="h-12 w-full rounded-2xl border border-slate-300 bg-slate-50 py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-500 hover:border-blue-400 focus:border-blue-500 focus:bg-white focus:shadow-[0_0_0_4px_rgba(59,130,246,0.14)]"
             onChange={(event) => setQuery(event.currentTarget.value)}
             placeholder="Search captions, links, platforms or prices..."
             type="search"

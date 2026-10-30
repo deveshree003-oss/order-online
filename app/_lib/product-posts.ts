@@ -11,11 +11,9 @@ import {
   isValidProductName,
   nullablePrice,
   parseProductPostMessage,
-  platformFromUrl,
-  extractProductUrls,
 } from "./product-post-parser.ts";
 import { resolveProductPostMetadata } from "./product-post-metadata.ts";
-import { normalizeWhatsAppGroupLink } from "./whatsapp-group-link.ts";
+import { firstProductOrderLink } from "./product-links.ts";
 
 export type ProductPost = {
   id: string;
@@ -27,6 +25,7 @@ export type ProductPost = {
   order_price: number | string | null;
   less_price: number | string | null;
   rating: number | string | null;
+  serial_number: number | null;
   published_at: string | null;
   status: "live" | "over";
   created_at: string;
@@ -42,8 +41,12 @@ export type ProductPostsResult = {
 
 const baseSelect =
   "id, image_url, description, status, created_at, updated_at";
+const baseSelectWithSerial =
+  `${baseSelect}, serial_number`;
 
 const metadataSelect =
+  "id, image_url, description, product_name, brand, platform, order_price, less_price, status, created_at, updated_at, serial_number";
+const metadataSelectWithoutSerial =
   "id, image_url, description, product_name, brand, platform, order_price, less_price, status, created_at, updated_at";
 
 type SupabaseQueryError = {
@@ -63,6 +66,7 @@ function missingOptionalProductPostSchema(
     message.includes("product_name") ||
     message.includes("published_at") ||
     message.includes("rating") ||
+    message.includes("serial_number") ||
     (message.includes("relation") &&
       message.includes("product_posts"))
   );
@@ -75,14 +79,12 @@ async function normalizePost(
     includeOrderFormSlots?: boolean;
   } = {},
 ): Promise<ProductPost> {
-  const description = normalizeWhatsAppGroupLink(String(row.description));
+  const description = String(row.description);
 
   const parsed = parseProductPostMessage(description);
 
-  const urls = extractProductUrls(description);
-
-  const productUrl =
-    urls.find((url) => platformFromUrl(url)) ?? urls[0];
+  const productLink = firstProductOrderLink(description);
+  const productUrl = productLink?.url;
 
   /*
    * ------------------------------------------------------------
@@ -229,6 +231,8 @@ async function normalizePost(
   return {
     id: String(row.id),
 
+    serial_number: validSerialNumber(row.serial_number),
+
     image_url: String(row.image_url),
 
     description,
@@ -239,7 +243,7 @@ async function normalizePost(
       validBrand || null,
 
     platform:
-      (productUrl ? platformFromUrl(productUrl) : "") ||
+      productLink?.platform ||
       (typeof row.platform === "string" ? row.platform : "") ||
       parsed.platform ||
       null,
@@ -276,6 +280,17 @@ async function normalizePost(
       ? await getJayShakthiOrderFormSlots(description)
       : null,
   };
+}
+
+function validSerialNumber(value: unknown) {
+  const serialNumber =
+    typeof value === "number" || typeof value === "string"
+      ? Number(value)
+      : Number.NaN;
+
+  return Number.isSafeInteger(serialNumber) && serialNumber > 0
+    ? serialNumber
+    : null;
 }
 
 function validRating(value: unknown) {
@@ -315,19 +330,37 @@ export async function getPublishedProductPosts(): Promise<ProductPostsResult> {
       error &&
       missingOptionalProductPostSchema(error)
     ) {
-      const fallback = await supabase
+      const fallbackMetadata = await supabase
         .from("product_posts")
-        .select(baseSelect)
+        .select(metadataSelectWithoutSerial)
         .in("status", ["live", "over"])
         .order("created_at", {
           ascending: false,
         });
-
-      rows =
-        (fallback.data ?? []) as unknown[];
-
-      error =
-        fallback.error as SupabaseQueryError;
+      rows = (fallbackMetadata.data ?? []) as unknown[];
+      error = fallbackMetadata.error as SupabaseQueryError;
+      if (error && missingOptionalProductPostSchema(error)) {
+        const fallbackWithSerial = await supabase
+          .from("product_posts")
+          .select(baseSelectWithSerial)
+          .in("status", ["live", "over"])
+          .order("created_at", {
+            ascending: false,
+          });
+        rows = (fallbackWithSerial.data ?? []) as unknown[];
+        error = fallbackWithSerial.error as SupabaseQueryError;
+        if (error && missingOptionalProductPostSchema(error)) {
+          const fallback = await supabase
+            .from("product_posts")
+            .select(baseSelect)
+            .in("status", ["live", "over"])
+            .order("created_at", {
+              ascending: false,
+            });
+          rows = (fallback.data ?? []) as unknown[];
+          error = fallback.error as SupabaseQueryError;
+        }
+      }
     }
 
     if (error) {
@@ -380,18 +413,34 @@ export async function getPublishedProductPost(
       error &&
       missingOptionalProductPostSchema(error)
     ) {
-      const fallback = await supabase
+      const fallbackMetadata = await supabase
         .from("product_posts")
-        .select(baseSelect)
+        .select(metadataSelectWithoutSerial)
         .eq("id", id)
         .in("status", ["live", "over"])
         .maybeSingle();
-
-      row =
-        fallback.data as unknown | null;
-
-      error =
-        fallback.error as SupabaseQueryError;
+      row = fallbackMetadata.data as unknown | null;
+      error = fallbackMetadata.error as SupabaseQueryError;
+      if (error && missingOptionalProductPostSchema(error)) {
+        const fallbackWithSerial = await supabase
+          .from("product_posts")
+          .select(baseSelectWithSerial)
+          .eq("id", id)
+          .in("status", ["live", "over"])
+          .maybeSingle();
+        row = fallbackWithSerial.data as unknown | null;
+        error = fallbackWithSerial.error as SupabaseQueryError;
+        if (error && missingOptionalProductPostSchema(error)) {
+          const fallback = await supabase
+            .from("product_posts")
+            .select(baseSelect)
+            .eq("id", id)
+            .in("status", ["live", "over"])
+            .maybeSingle();
+          row = fallback.data as unknown | null;
+          error = fallback.error as SupabaseQueryError;
+        }
+      }
     }
 
     return error || !row

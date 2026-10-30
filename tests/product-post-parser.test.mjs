@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cleanProductTitle, deriveProductCodeTitle, deriveProductNameFromUrl, extractProductPrices, inferProductNameFromMessage, isValidProductName, nullablePrice, parseProductPostMessage } from "../app/_lib/product-post-parser.ts";
+import { cleanProductTitle, deriveProductCodeTitle, deriveProductNameFromUrl, extractProductPrices, inferProductNameFromMessage, isValidProductName, nullablePrice, parseProductPostMessage, platformFromUrl } from "../app/_lib/product-post-parser.ts";
 import { resolveProductPostMetadata } from "../app/_lib/product-post-metadata.ts";
 
 const example = `https://www.amazon.in/dp/B0F53TTJF5?th=1&psc=1
@@ -18,6 +18,15 @@ test("parses the example without using the deal label as the product name", () =
   assert.equal(metadata.platform, "Amazon");
   assert.equal(metadata.orderPrice, "");
   assert.equal(metadata.lessPrice, "119");
+});
+
+test("recognizes platform names from common retailer URLs", () => {
+  assert.equal(platformFromUrl("https://www.blinkit.com/prn/product"), "Blinkit");
+  assert.equal(platformFromUrl("https://www.zeptonow.com/pn/product"), "Zepto");
+  assert.equal(
+    parseProductPostMessage("https://blinkit.com/prn/product").platform,
+    "Blinkit",
+  );
 });
 
 test("keeps missing prices null while preserving a real zero price", () => {
@@ -148,6 +157,7 @@ test("derives a short product title from an order-link search term or product pa
   assert.equal(deriveProductNameFromUrl("https://bitli.in/QyeGq8Q"), "");
   assert.equal(isValidProductName("B0F53TTJF5"), false);
   assert.equal(isValidProductName("QyeGq8Q"), false);
+  assert.equal(deriveProductNameFromUrl("https://deal.jayshakthimarketing.com/orderform?product_code=BG_Jellyra_fk"), "");
 });
 
 test("never treats an instruction, deal label, or product code as a product name", () => {
@@ -155,6 +165,8 @@ test("never treats an instruction, deal label, or product code as a product name
 
   assert.equal(isValidProductName("Deal Type: Review"), false);
   assert.equal(isValidProductName("Mediator Name: Samarth"), false);
+  assert.equal(isValidProductName("� Mediator Name: Samarth"), false);
+  assert.equal(isValidProductName("orderform"), false);
   assert.equal(isValidProductName("Order Link:"), false);
   assert.equal(isValidProductName("Refund Form:"), false);
   assert.equal(isValidProductName("Note:"), false);

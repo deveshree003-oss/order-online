@@ -34,7 +34,7 @@ test("keeps genuinely different product links as separate actions", () => {
   assert.deepEqual(actions.map((action) => action.label), ["Open Meal Pod Black", "Open Meal Pod Rouge"]);
 });
 
-test("sends the mandatory WhatsApp reference action to the configured number", () => {
+test("sends the unchanged caption without separate product-link or reference lines", () => {
   const description = `Product link: https://www.amazon.in/dp/example
 Deal Type: Review
 Order Form: https://example.com/orderform
@@ -54,16 +54,17 @@ Please share the order reference after placing the order.`;
   const whatsappAction = actions.find((action) => action.type === "whatsapp");
   const whatsappUrl = new URL(whatsappAction?.url ?? "");
   const draftMessage = whatsappUrl.searchParams.get("text");
+  const generatedMessageDetails = draftMessage?.slice(fullDescription.length) ?? "";
 
   assert.equal(whatsappAction?.label, "Send Reference on WhatsApp (MANDATORY)");
   assert.equal(whatsappUrl.origin + whatsappUrl.pathname, "https://wa.me/917588424031");
-  assert.match(draftMessage ?? "", /Product: Winter Jacket/);
-  assert.match(draftMessage ?? "", /Brand: North Star/);
-  assert.match(draftMessage ?? "", /Platform: Amazon/);
-  assert.match(draftMessage ?? "", /Order price: ₹169/);
-  assert.match(draftMessage ?? "", /Deal price: ₹89/);
-  assert.match(draftMessage ?? "", /Product link: https:\/\/www\.amazon\.in\/dp\/example/);
-  assert.ok(draftMessage?.endsWith(`Full product details:\n${fullDescription}`));
+  assert.ok(draftMessage?.startsWith(description));
+  assert.doesNotMatch(draftMessage ?? "", /^Reference:/m);
+  assert.doesNotMatch(generatedMessageDetails, /^Reference:/m);
+  assert.doesNotMatch(generatedMessageDetails, /^Product(?:\/order)? link:/m);
+  assert.match(draftMessage ?? "", /Mediator: Samarth/);
+  assert.match(draftMessage ?? "", /https:\/\/chat\.whatsapp\.com\//);
+  assert.ok(draftMessage?.includes(fullDescription));
 });
 
 test("omits missing actions and extracts structured deal information", () => {

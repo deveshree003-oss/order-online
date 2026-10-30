@@ -3,29 +3,27 @@ import Link from "next/link";
 import type { ProductPost } from "../_lib/product-posts";
 import { formatDate, formatPrice } from "../_lib/formatters";
 import { numericPrice } from "../_lib/pricing";
+import { firstProductOrderLink } from "../_lib/product-links";
 import ProductPostSlotCount from "./product-post-slot-count";
 
 export default function ProductPostCard({
   post,
-  position,
 }: {
   post: ProductPost;
-  position?: number;
 }) {
   const orderPrice = numericPrice(post.order_price);
   const lessPrice = numericPrice(post.less_price);
   const isLive = post.status === "live";
   const detailUrl = `/products/${post.id}`;
-  const platformName = post.platform;
+  const productLink = firstProductOrderLink(post.description);
+  const platformName = post.platform?.trim() || productLink?.platform || "Platform not specified";
   const hasRatingKeyword = /rating|regular rating|rating deal/i.test(post.description);
-  const fireBadge =
-    platformName && platformName.toLowerCase() !== "amazon" ? "🔥" : null;
 
   return (
     <article className="group flex min-h-[132px] flex-row overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-900/10 md:min-h-0 md:flex-col">
       <div className="relative flex w-[38%] shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-[#f8f7fb] to-[#eef5f5] p-1.5 sm:p-2 md:aspect-[4/3] md:w-auto md:p-3">
         <Link
-          aria-label={`View deal ${position ?? ""}`.trim()}
+          aria-label={`View product ${post.serial_number ?? ""}`.trim()}
           className="group/image flex h-full w-full items-center justify-center rounded-2xl focus:outline-none focus:ring-4 focus:ring-slate-950/20"
           href={detailUrl}
         >
@@ -47,17 +45,27 @@ export default function ProductPostCard({
 
       <div className="flex min-w-0 flex-1 flex-col p-2 sm:p-3 md:p-4">
         <div className="flex min-w-0 items-center gap-2">
-          {position !== undefined && (
-            <span className="shrink-0 rounded-full bg-[#f3f1e8] px-2.5 py-1.5 text-xs font-black text-slate-950 md:px-3 md:py-2 md:text-sm">
-              #{position}
-            </span>
-          )}
-          {fireBadge && (
-            <span aria-label={`${platformName} deal`} className="text-sm" title={`${platformName} deal`}>
-              {fireBadge}
-            </span>
+          <span className="shrink-0 rounded-full bg-[#f3f1e8] px-2.5 py-1.5 text-xs font-black text-slate-950 md:px-3 md:py-2 md:text-sm">
+            #{post.serial_number ?? "—"}
+          </span>
+          <span className="max-w-28 truncate rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-800 md:text-xs">{platformName}</span>
+          {productLink && (
+            <a
+              aria-label={`Open ${platformName} product link`}
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm transition hover:bg-orange-200 focus:outline-none focus:ring-4 focus:ring-orange-500/25"
+              href={productLink.url}
+              rel="noopener noreferrer"
+              target="_blank"
+              title={`Open ${platformName} product link`}
+            >
+              🔥
+            </a>
           )}
         </div>
+
+        <h3 className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-slate-900 md:text-base">
+          {post.product_name || "Product deal"}
+        </h3>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {orderPrice !== null && (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { ProductPost } from "../_lib/product-posts";
+import { createSupabaseBrowserClient } from "../_lib/supabase-browser";
 import ProductPostCard from "./product-post-card";
 import Header from "./header";
 
@@ -16,11 +17,13 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
+  const [isRefundTimeOpen, setIsRefundTimeOpen] = useState(false);
   const closeDialogRef = useRef<HTMLButtonElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const visiblePosts = posts.filter((post) => {
     const searchableContent = [
       post.platform,
+      post.product_name,
       post.description,
       post.order_price,
       post.less_price,
@@ -34,12 +37,15 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
   const overPosts = visiblePosts.filter((post) => post.status === "over");
 
   useEffect(() => {
-    if (!isHowItWorksOpen) return;
+    if (!isHowItWorksOpen && !isRefundTimeOpen) return;
 
     const previousActiveElement = document.activeElement as HTMLElement | null;
     closeDialogRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsHowItWorksOpen(false);
+      if (event.key === "Escape") {
+        setIsHowItWorksOpen(false);
+        setIsRefundTimeOpen(false);
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -47,17 +53,45 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
       document.removeEventListener("keydown", handleKeyDown);
       previousActiveElement?.focus();
     };
-  }, [isHowItWorksOpen]);
+  }, [isHowItWorksOpen, isRefundTimeOpen]);
 
   useEffect(() => {
     const refreshTimer = window.setInterval(() => router.refresh(), 30_000);
     return () => window.clearInterval(refreshTimer);
   }, [router]);
 
+  useEffect(() => {
+    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch (error) {
+      console.error("Unable to initialize live product updates.", error);
+      return;
+    }
+
+    const channel = supabase
+      .channel("public-product-post-updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "product_posts" },
+        () => router.refresh(),
+      )
+      .subscribe((status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Live product updates are unavailable.", error ?? status);
+        }
+      });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [router]);
+
   return (
     <div id="top" className="min-h-screen bg-[#f7f8fa] text-slate-950">
       <Header
         onHowItWorks={() => setIsHowItWorksOpen(true)}
+        onRefundTime={() => setIsRefundTimeOpen(true)}
         searchValue={query}
         onSearchChange={setQuery}
       />
@@ -76,8 +110,8 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
                   <p className="text-xs font-medium text-slate-600 sm:text-sm">{livePosts.length} {livePosts.length === 1 ? "deal" : "deals"}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:gap-4">
-                  {livePosts.map((post, index) => (
-                    <ProductPostCard key={post.id} post={post} position={index + 1} />
+                  {livePosts.map((post) => (
+                    <ProductPostCard key={post.id} post={post} />
                   ))}
                 </div>
               </section>
@@ -89,8 +123,8 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
                   <p className="text-xs font-medium text-slate-600 sm:text-sm">{overPosts.length} {overPosts.length === 1 ? "deal" : "deals"}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:gap-4">
-                  {overPosts.map((post, index) => (
-                    <ProductPostCard key={post.id} post={post} position={livePosts.length + index + 1} />
+                  {overPosts.map((post) => (
+                    <ProductPostCard key={post.id} post={post} />
                   ))}
                 </div>
               </section>
@@ -155,6 +189,41 @@ export default function DealsHomepage({ posts, errorMessage }: DealsHomepageProp
                 </li>
               ))}
             </ol>
+          </div>
+        </div>
+      )}
+      {isRefundTimeOpen && (
+        <div
+          aria-label="Refund time information"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-4 sm:items-center"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsRefundTimeOpen(false);
+          }}
+          role="dialog"
+        >
+          <div className="w-full max-w-xl rounded-3xl border border-orange-100 bg-white p-6 shadow-2xl sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-orange-700">Payment information</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Refund Time</h2>
+              </div>
+              <button
+                aria-label="Close refund time"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-xl text-slate-600 transition hover:border-orange-400 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                onClick={() => setIsRefundTimeOpen(false)}
+                ref={closeDialogRef}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-6 space-y-4 text-sm leading-7 text-slate-700 sm:text-base">
+              <p>No need to ask me for a refund. I will personally inform everyone whose payment is still pending and will also update the group.</p>
+              <p>Refund time is <strong className="font-black text-orange-700">40 to 55+ days</strong>, depending on the brand.</p>
+              <p>The sheet will be checked before 45 days, so don&apos;t worry about deletion errors.</p>
+              <p>Your review has to remain <strong className="font-black text-rose-700">LIVE for a minimum of 45 days</strong>. If your payment gets rejected, it means your review may have been deleted before 45 days.</p>
+            </div>
           </div>
         </div>
       )}

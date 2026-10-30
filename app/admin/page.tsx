@@ -26,7 +26,7 @@ export default async function AdminPage() {
       <div className="mx-auto max-w-5xl">
         <header className="flex flex-col gap-6 border-b border-slate-200 pb-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">SAMARTH DEALS</p>
+            <p className="bg-gradient-to-r from-slate-800 via-blue-800 to-emerald-700 bg-clip-text text-xs font-black uppercase tracking-[0.16em] text-transparent">SAMARTH DEALS</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Admin Dashboard</h1>
             <p className="mt-2 text-sm text-slate-600">Signed in as an authorized administrator</p>
           </div>

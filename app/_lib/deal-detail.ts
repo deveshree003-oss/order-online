@@ -1,4 +1,5 @@
 import { tokenizeDescription, type DescriptionPart } from "./description-links.ts";
+import { whatsappGroupLink } from "./whatsapp-group-link.ts";
 
 const WHATSAPP_REFERENCE_URL = "https://wa.me/917588424031";
 
@@ -8,6 +9,7 @@ export type DealReferenceDetails = {
   platform?: string | null;
   orderPrice?: number | string | null;
   lessPrice?: number | string | null;
+  mediator?: string | null;
 };
 
 export type DealAction = {
@@ -109,26 +111,19 @@ export function getDealActions(
 
   const whatsappAction = actions.find((action) => action.type === "whatsapp");
   if (whatsappAction) {
-    const productUrl = actions.find((action) => action.type === "product")?.url;
-    const messageLines = [
-      "Hi, I am sharing the details for my order:",
-    ];
-    if (details.productName) messageLines.push(`Product: ${details.productName}`);
-    if (details.brand) messageLines.push(`Brand: ${details.brand}`);
-    if (details.platform) messageLines.push(`Platform: ${details.platform}`);
-    if (details.orderPrice !== null && details.orderPrice !== undefined) {
-      messageLines.push(`Order price: ₹${details.orderPrice}`);
-    }
-    if (details.lessPrice !== null && details.lessPrice !== undefined) {
-      messageLines.push(`Deal price: ₹${details.lessPrice}`);
-    }
-    if (productUrl) messageLines.push(`Product link: ${productUrl}`);
-    if (description.trim()) {
-      messageLines.push("", "Full product details:", description.trim());
-    }
+    const hasMediator = /^\s*mediator(?:\s+name)?\s*[:-]/im.test(description);
+    const hasGroupLink = /https?:\/\/chat\.whatsapp\.com\//i.test(description);
+    const additionalDetails = [
+      !hasMediator ? `Mediator: ${details.mediator ?? "Samarth"}` : null,
+      !hasGroupLink ? whatsappGroupLink : null,
+    ].filter((line): line is string => Boolean(line));
+    const message = [
+      description,
+      ...(additionalDetails.length ? ["", ...additionalDetails] : []),
+    ].join("\n");
 
     const url = new URL(WHATSAPP_REFERENCE_URL);
-    url.searchParams.set("text", messageLines.join("\n"));
+    url.searchParams.set("text", message);
     whatsappAction.url = url.toString();
   }
 
